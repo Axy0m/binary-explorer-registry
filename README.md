@@ -27,9 +27,10 @@ Two ideas keep it simple:
   only a thin layer of metadata (`meta.toml`) and a generated catalog
   ([`index.json`](./index.json)) on top of it.
 
-The catalog currently ships **21 packs** spanning images, audio, video,
-executables, filesystems, fonts, archives, network captures, and 3D models —
-see [`index.json`](./index.json) for the authoritative, always-current list.
+The catalog currently ships **28 packs** spanning images, audio, video,
+executables, filesystems, firmware, fonts, archives, network captures, Windows
+system artifacts, and 3D models — see [`index.json`](./index.json) for the
+authoritative, always-current list.
 
 ## What's a format pack?
 

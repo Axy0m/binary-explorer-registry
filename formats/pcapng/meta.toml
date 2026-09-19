@@ -1,0 +1,5 @@
+category = "network"
+tags = ["network", "capture", "packets", "wireshark"]
+maintainer = "Nybble"
+homepage = "https://pcapng.com/"
+sample = ""

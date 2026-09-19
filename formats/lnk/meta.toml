@@ -1,0 +1,5 @@
+category = "system"
+tags = ["windows", "forensics", "shortcut", "dfir", "malware"]
+maintainer = "Nybble"
+homepage = "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-shllink/"
+sample = ""

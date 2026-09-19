@@ -1,0 +1,5 @@
+category = "filesystem"
+tags = ["filesystem", "firmware", "embedded", "squashfs", "compressed"]
+maintainer = "Nybble"
+homepage = "https://dr-emann.github.io/squashfs/"
+sample = ""

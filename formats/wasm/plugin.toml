@@ -1,0 +1,77 @@
+id = "wasm"
+name = "WebAssembly module"
+version = "1.0.0"
+description = "WebAssembly binary module: LEB128-driven sections, with type, function, export and code decoded."
+author = "Nybble"
+
+[[formats]]
+name = "WASM"
+extension = "wasm"
+description = "WebAssembly binary module"
+confidence = 98
+entry = "Wasm"
+endian = "le"
+detect = [{ offset = 0, hex = "00 61 73 6D 01 00 00 00" }]
+schema = """
+// WebAssembly binary module — every section size, vector count and index in the
+// format is an LEB128 varint, so nothing sits at a fixed offset. Sections whose
+// id is not decoded below are left as raw bytes.
+
+struct Wasm {
+    magic    bytes[4]       "00 61 73 6d"
+    version  u32            "binary format version (1)"
+    sections repeat WasmSection "sections run to the end of the module"
+}
+
+struct WasmSection {
+    id   u8     "0 custom, 1 type, 3 function, 7 export, 10 code"
+    size varint "section length in bytes (LEB128)"
+    body match id {
+        1  => WasmTypeSection
+        3  => WasmFunctionSection
+        7  => WasmExportSection
+        10 => WasmCodeSection
+        default => bytes[size]
+    }
+}
+
+struct WasmTypeSection {
+    count varint "number of function types"
+    types WasmFuncType[count]
+}
+
+struct WasmFuncType {
+    form     u8     "0x60 marks a function type"
+    nparams  varint "number of parameters"
+    params   u8[nparams]  "value types: 7f i32, 7e i64, 7d f32, 7c f64"
+    nresults varint "number of results"
+    results  u8[nresults] "result value types"
+}
+
+struct WasmFunctionSection {
+    count   varint "number of functions"
+    typeIdx varint[count] "type index for each function"
+}
+
+struct WasmExportSection {
+    count   varint "number of exports"
+    exports WasmExport[count]
+}
+
+struct WasmExport {
+    nameLen varint "length of the export name"
+    name    string[nameLen] "the name the host sees"
+    kind    u8     "0 func, 1 table, 2 memory, 3 global"
+    index   u8     "index into that kind space"
+}
+
+struct WasmCodeSection {
+    count varint "number of function bodies"
+    funcs WasmFuncBody[count]
+}
+
+struct WasmFuncBody {
+    bodySize varint "byte length of this body"
+    body     bytes[bodySize] "locals, instructions, then 0x0b end"
+}
+"""

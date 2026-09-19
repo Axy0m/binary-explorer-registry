@@ -1,0 +1,69 @@
+id = "squashfs"
+name = "SquashFS superblock"
+version = "1.0.0"
+description = "SquashFS superblock: the read-only filesystem found in most router and IoT firmware."
+author = "Nybble"
+
+[[formats]]
+name = "SQUASHFS"
+extension = "squashfs"
+description = "SquashFS little-endian superblock (hsqs)"
+confidence = 95
+entry = "SquashFs"
+endian = "le"
+detect = [{ offset = 0, hex = "68 73 71 73" }]
+schema = """
+// SquashFS superblock — the read-only filesystem inside almost every consumer
+// router, IP camera and IoT firmware image. This is the 96-byte little-endian
+// superblock (magic "hsqs"); big-endian images carry "sqsh" instead and need a
+// big-endian parse.
+//
+// The table offsets below are where an unpacker starts: each points at a
+// metadata block elsewhere in the image.
+
+enum SquashfsCompression : u16 {
+    Gzip = 1
+    Lzma = 2
+    Lzo  = 3
+    Xz   = 4
+    Lz4  = 5
+    Zstd = 6
+}
+
+bitfield SquashfsFlags : u16 {
+    uncompressedInodes    0
+    uncompressedData      1
+    check                 2
+    uncompressedFragments 3
+    noFragments           4
+    alwaysFragments       5
+    duplicates            6
+    exportable            7
+    uncompressedXattrs    8
+    noXattrs              9
+    compressorOptions     10
+    uncompressedIds       11
+}
+
+struct SquashFs {
+    magic              u32                 "hsqs (little-endian image)"
+    inodeCount         u32                 "number of inodes in the filesystem"
+    modificationTime   u32                 "creation or last append time (unix)"
+    blockSize          u32                 "data block size in bytes"
+    fragmentEntryCount u32                 "number of fragment entries"
+    compressionId      SquashfsCompression "compressor used for data and metadata"
+    blockLog           u16                 "log2 of blockSize"
+    flags              SquashfsFlags       "what is compressed and what is present"
+    idCount            u16                 "number of entries in the uid/gid table"
+    versionMajor       u16                 "4 for modern images"
+    versionMinor       u16
+    rootInode          u64                 "reference to the root directory inode"
+    bytesUsed          u64                 "bytes of the archive actually used"
+    idTableStart       u64                 "offset of the uid/gid lookup table"
+    xattrIdTableStart  u64                 "offset of the xattr id table (-1 if none)"
+    inodeTableStart    u64                 "offset of the inode table"
+    directoryTableStart u64                "offset of the directory table"
+    fragmentTableStart u64                 "offset of the fragment table"
+    exportTableStart   u64                 "offset of the export (NFS) table"
+}
+"""

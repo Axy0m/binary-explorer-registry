@@ -1,0 +1,5 @@
+category = "firmware"
+tags = ["firmware", "embedded", "u-boot", "kernel", "bootloader"]
+maintainer = "Nybble"
+homepage = "https://source.denx.de/u-boot/u-boot/-/blob/master/include/image.h"
+sample = ""

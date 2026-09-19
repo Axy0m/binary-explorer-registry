@@ -1,0 +1,128 @@
+id = "ext4"
+name = "ext2/3/4 superblock"
+version = "1.0.0"
+description = "Linux ext2/ext3/ext4 superblock, read at its real home 1024 bytes into the volume."
+author = "Nybble"
+
+[[formats]]
+name = "EXT4"
+extension = "img"
+description = "ext2/3/4 filesystem superblock"
+confidence = 85
+entry = "Ext4"
+endian = "le"
+detect = [{ offset = 1080, hex = "53 EF" }]
+schema = """
+// ext2/3/4 superblock — the Linux filesystem header, which lives 1024 bytes
+// into the volume (not at offset 0), with its 0xEF53 magic at 0x438. Point this
+// at a raw partition image or a carved filesystem.
+//
+// The feature flags are what tell ext2 from ext3 from ext4: hasJournal makes it
+// ext3, extents and 64bit make it ext4.
+
+enum Ext4State : u16 {
+    Clean          = 1
+    HasErrors      = 2
+    OrphansRecovering = 4
+}
+
+enum Ext4Errors : u16 {
+    Continue        = 1
+    RemountReadOnly = 2
+    Panic           = 3
+}
+
+enum Ext4CreatorOs : u32 {
+    Linux   = 0
+    Hurd    = 1
+    Masix   = 2
+    FreeBsd = 3
+    Lites   = 4
+}
+
+bitfield Ext4FeatureCompat : u32 {
+    dirPrealloc   0
+    imagicInodes  1
+    hasJournal    2
+    extAttr       3
+    resizeInode   4
+    dirIndex      5
+    sparseSuper2  9
+}
+
+bitfield Ext4FeatureIncompat : u32 {
+    compression 0
+    filetype    1
+    recover     2
+    journalDev  3
+    metaBg      4
+    extents     6
+    is64bit     7
+    mmp         8
+    flexBg      9
+    eaInode     10
+    dirdata     12
+    csumSeed    13
+    largedir    14
+    inlineData  15
+    encrypt     16
+}
+
+bitfield Ext4FeatureRoCompat : u32 {
+    sparseSuper  0
+    largeFile    1
+    btreeDir     2
+    hugeFile     3
+    gdtCsum      4
+    dirNlink     5
+    extraIsize   6
+    quota        8
+    bigalloc     9
+    metadataCsum 10
+    readonly     13
+    project      14
+    verity       15
+}
+
+struct Ext4Superblock {
+    inodesCount       u32 "total inodes"
+    blocksCountLo     u32 "total blocks, low 32 bits"
+    reservedBlocksLo  u32 "blocks reserved for the superuser"
+    freeBlocksLo      u32 "free blocks, low 32 bits"
+    freeInodesCount   u32 "free inodes"
+    firstDataBlock    u32 "first data block (1 on 1 KiB blocks, else 0)"
+    logBlockSize      u32 "block size is 1024 shifted left by this"
+    logClusterSize    u32 "cluster size is 1024 shifted left by this"
+    blocksPerGroup    u32 "blocks per block group"
+    clustersPerGroup  u32 "clusters per block group"
+    inodesPerGroup    u32 "inodes per block group"
+    mountTime         u32 "last mount time (unix)"
+    writeTime         u32 "last write time (unix)"
+    mountCount        u16 "mounts since the last check"
+    maxMountCount     u16 "mounts allowed before a check is forced"
+    magic             u16 "0xEF53"
+    state             Ext4State "was the filesystem cleanly unmounted"
+    errors            Ext4Errors "what to do when an error is found"
+    minorRevLevel     u16 "minor revision"
+    lastCheck         u32 "time of the last check (unix)"
+    checkInterval     u32 "max seconds between checks"
+    creatorOs         Ext4CreatorOs "OS that created the filesystem"
+    revLevel          u32 "0 = original, 1 = dynamic inode sizes"
+    defaultResUid     u16 "default uid for reserved blocks"
+    defaultResGid     u16 "default gid for reserved blocks"
+    firstInode        u32 "first non-reserved inode"
+    inodeSize         u16 "size of an inode in bytes"
+    blockGroupNr      u16 "block group hosting this superblock copy"
+    featureCompat     Ext4FeatureCompat   "optional features"
+    featureIncompat   Ext4FeatureIncompat "features required to mount"
+    featureRoCompat   Ext4FeatureRoCompat "features required to mount writable"
+    uuid              bytes[16] "filesystem UUID"
+    volumeName        char[16]  "volume label"
+    lastMounted       char[64]  "directory it was last mounted on"
+}
+
+struct Ext4 {
+    bootBlock  bytes[1024]      "boot block: not part of the filesystem metadata"
+    superblock Ext4Superblock   "the superblock, 1024 bytes into the volume"
+}
+"""

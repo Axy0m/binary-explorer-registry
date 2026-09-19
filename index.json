@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "count": 21,
+  "count": 28,
   "formats": [
     {
       "id": "aiff",
@@ -23,6 +23,30 @@
         }
       ],
       "path": "formats/aiff/plugin.toml"
+    },
+    {
+      "id": "androidboot",
+      "name": "Android boot image",
+      "version": "1.0.0",
+      "description": "Android boot.img header, versions 0 through 2, with the kernel command line.",
+      "author": "Nybble",
+      "category": "firmware",
+      "tags": [
+        "firmware",
+        "android",
+        "boot",
+        "mobile",
+        "kernel"
+      ],
+      "formats": [
+        {
+          "name": "ANDROIDBOOT",
+          "extension": "img",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/androidboot/plugin.toml"
     },
     {
       "id": "avi",
@@ -90,6 +114,30 @@
         }
       ],
       "path": "formats/dex/plugin.toml"
+    },
+    {
+      "id": "ext4",
+      "name": "ext2/3/4 superblock",
+      "version": "1.0.0",
+      "description": "Linux ext2/ext3/ext4 superblock, read at its real home 1024 bytes into the volume.",
+      "author": "Nybble",
+      "category": "filesystem",
+      "tags": [
+        "filesystem",
+        "linux",
+        "ext4",
+        "forensics",
+        "disk"
+      ],
+      "formats": [
+        {
+          "name": "EXT4",
+          "extension": "img",
+          "detects": true,
+          "confidence": 85
+        }
+      ],
+      "path": "formats/ext4/plugin.toml"
     },
     {
       "id": "flac",
@@ -250,6 +298,30 @@
       "path": "formats/jpeg/plugin.toml"
     },
     {
+      "id": "lnk",
+      "name": "Windows shortcut",
+      "version": "1.0.0",
+      "description": "Windows .lnk ShellLinkHeader: timestamps, target attributes and link flags.",
+      "author": "Nybble",
+      "category": "system",
+      "tags": [
+        "windows",
+        "forensics",
+        "shortcut",
+        "dfir",
+        "malware"
+      ],
+      "formats": [
+        {
+          "name": "LNK",
+          "extension": "lnk",
+          "detects": true,
+          "confidence": 98
+        }
+      ],
+      "path": "formats/lnk/plugin.toml"
+    },
+    {
       "id": "macho",
       "name": "Mach-O executable",
       "version": "1.0.0",
@@ -319,6 +391,29 @@
       "path": "formats/pcap/plugin.toml"
     },
     {
+      "id": "pcapng",
+      "name": "pcapng capture",
+      "version": "1.0.0",
+      "description": "pcapng capture: walks every block, decoding the common block types.",
+      "author": "Nybble",
+      "category": "network",
+      "tags": [
+        "network",
+        "capture",
+        "packets",
+        "wireshark"
+      ],
+      "formats": [
+        {
+          "name": "PCAPNG",
+          "extension": "pcapng",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/pcapng/plugin.toml"
+    },
+    {
       "id": "qoi",
       "name": "QOI image",
       "version": "1.0.0",
@@ -339,6 +434,30 @@
         }
       ],
       "path": "formats/qoi/plugin.toml"
+    },
+    {
+      "id": "squashfs",
+      "name": "SquashFS superblock",
+      "version": "1.0.0",
+      "description": "SquashFS superblock: the read-only filesystem found in most router and IoT firmware.",
+      "author": "Nybble",
+      "category": "filesystem",
+      "tags": [
+        "filesystem",
+        "firmware",
+        "embedded",
+        "squashfs",
+        "compressed"
+      ],
+      "formats": [
+        {
+          "name": "SQUASHFS",
+          "extension": "squashfs",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/squashfs/plugin.toml"
     },
     {
       "id": "tar",
@@ -418,6 +537,54 @@
         }
       ],
       "path": "formats/truetype/plugin.toml"
+    },
+    {
+      "id": "uimage",
+      "name": "U-Boot uImage",
+      "version": "1.0.0",
+      "description": "U-Boot legacy image header: the 64-byte big-endian header on embedded kernels and ramdisks.",
+      "author": "Nybble",
+      "category": "firmware",
+      "tags": [
+        "firmware",
+        "embedded",
+        "u-boot",
+        "kernel",
+        "bootloader"
+      ],
+      "formats": [
+        {
+          "name": "UIMAGE",
+          "extension": "uimage",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/uimage/plugin.toml"
+    },
+    {
+      "id": "wasm",
+      "name": "WebAssembly module",
+      "version": "1.0.0",
+      "description": "WebAssembly binary module: LEB128-driven sections, with type, function, export and code decoded.",
+      "author": "Nybble",
+      "category": "executable",
+      "tags": [
+        "executable",
+        "webassembly",
+        "wasm",
+        "bytecode",
+        "varint"
+      ],
+      "formats": [
+        {
+          "name": "WASM",
+          "extension": "wasm",
+          "detects": true,
+          "confidence": 98
+        }
+      ],
+      "path": "formats/wasm/plugin.toml"
     },
     {
       "id": "wav",

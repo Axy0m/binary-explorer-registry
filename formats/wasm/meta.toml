@@ -1,0 +1,5 @@
+category = "executable"
+tags = ["executable", "webassembly", "wasm", "bytecode", "varint"]
+maintainer = "Nybble"
+homepage = "https://webassembly.github.io/spec/core/binary/index.html"
+sample = ""

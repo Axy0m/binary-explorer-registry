@@ -1,0 +1,54 @@
+id = "androidboot"
+name = "Android boot image"
+version = "1.0.0"
+description = "Android boot.img header, versions 0 through 2, with the kernel command line."
+author = "Nybble"
+
+[[formats]]
+name = "ANDROIDBOOT"
+extension = "img"
+description = "Android boot/recovery image header"
+confidence = 95
+entry = "AndroidBoot"
+endian = "le"
+detect = [{ offset = 0, hex = "41 4E 44 52 4F 49 44 21" }]
+schema = """
+// Android boot image (boot.img) — the partition holding the kernel, ramdisk and
+// kernel command line on an Android device. Header versions 0, 1 and 2 share a
+// prefix; the later fields appear only when headerVersion says so.
+//
+// Every section is padded up to pageSize, so the kernel starts at pageSize, the
+// ramdisk at the next page boundary after it, and so on.
+
+struct AndroidBoot {
+    magic          char[8]    "ANDROID!"
+    kernelSize     u32        "kernel size in bytes"
+    kernelAddr     u32        "physical load address of the kernel"
+    ramdiskSize    u32        "ramdisk size in bytes (0 if none)"
+    ramdiskAddr    u32        "physical load address of the ramdisk"
+    secondSize     u32        "second stage size in bytes (rarely used)"
+    secondAddr     u32        "physical load address of the second stage"
+    tagsAddr       u32        "physical address of the kernel tags or device tree"
+    pageSize       u32        "flash page size; every section is padded to it"
+    headerVersion  u32        "0, 1 or 2 (older images put a size here)"
+    osVersion      u32        "OS version and security patch level, packed"
+    name           char[16]   "product name (NUL-padded)"
+    cmdline        char[512]  "kernel command line"
+    id             bytes[32]  "SHA-1 digest of the image sections, zero padded"
+    extraCmdline   char[1024] "command line continued past 512 bytes"
+
+    // --- header version 1 ---
+    recoveryDtboSize   u32 if headerVersion >= 1 "recovery DTBO or ACPIO size"
+    recoveryDtboOffset u64 if headerVersion >= 1 "offset of the recovery DTBO"
+    headerSize         u32 if headerVersion >= 1 "size of this header (1648 or 1660)"
+
+    // --- header version 2 ---
+    dtbSize u32 if headerVersion >= 2 "device tree blob size"
+    dtbAddr u64 if headerVersion >= 2 "physical load address of the device tree"
+}
+
+// The kernel starts at pageSize, and each following section starts at the next
+// page boundary after the one before it. Those spans are deliberately not read
+// as fields here: a carved header with no payload is a normal thing to look at,
+// and pulling in a multi-megabyte kernel would make such a file fail to parse.
+"""

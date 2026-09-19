@@ -1,0 +1,5 @@
+category = "firmware"
+tags = ["firmware", "android", "boot", "mobile", "kernel"]
+maintainer = "Nybble"
+homepage = "https://source.android.com/docs/core/architecture/bootloader/boot-image-header"
+sample = ""

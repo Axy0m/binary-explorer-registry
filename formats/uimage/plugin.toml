@@ -1,0 +1,111 @@
+id = "uimage"
+name = "U-Boot uImage"
+version = "1.0.0"
+description = "U-Boot legacy image header: the 64-byte big-endian header on embedded kernels and ramdisks."
+author = "Nybble"
+
+[[formats]]
+name = "UIMAGE"
+extension = "uimage"
+description = "U-Boot legacy image header"
+confidence = 95
+entry = "UImage"
+endian = "be"
+detect = [{ offset = 0, hex = "27 05 19 56" }]
+schema = """
+// U-Boot legacy image (uImage) — the 64-byte big-endian header U-Boot prepends
+// to a kernel, ramdisk, device tree or script. Turns up constantly in router
+// and embedded firmware dumps, usually somewhere in the middle of a flash
+// image rather than at offset 0.
+
+enum UImageOs : u8 {
+    Invalid = 0
+    OpenBsd = 1
+    NetBsd  = 2
+    FreeBsd = 3
+    Bsd44   = 4
+    Linux   = 5
+    Svr4    = 6
+    Esix    = 7
+    Solaris = 8
+    Irix    = 9
+    Sco     = 10
+    Dell    = 11
+    Ncr     = 12
+    LynxOs  = 13
+    VxWorks = 14
+    PsOs    = 15
+    Qnx     = 16
+    UBoot   = 17
+    Rtems   = 18
+}
+
+enum UImageArch : u8 {
+    Invalid    = 0
+    Alpha      = 1
+    Arm        = 2
+    I386       = 3
+    Ia64       = 4
+    Mips       = 5
+    Mips64     = 6
+    Ppc        = 7
+    S390       = 8
+    Sh         = 9
+    Sparc      = 10
+    Sparc64    = 11
+    M68k       = 12
+    Nios       = 13
+    MicroBlaze = 14
+    Nios2      = 15
+    Blackfin   = 16
+    Avr32      = 17
+    St200      = 18
+    Sandbox    = 19
+    Nds32      = 20
+    OpenRisc   = 21
+    Arm64      = 22
+    Arc        = 23
+    X86_64     = 24
+    Xtensa     = 25
+    RiscV      = 26
+}
+
+enum UImageType : u8 {
+    Invalid    = 0
+    Standalone = 1
+    Kernel     = 2
+    Ramdisk    = 3
+    Multi      = 4
+    Firmware   = 5
+    Script     = 6
+    Filesystem = 7
+    FlatDt     = 8
+    KwbImage   = 9
+    ImxImage   = 10
+}
+
+enum UImageComp : u8 {
+    None  = 0
+    Gzip  = 1
+    Bzip2 = 2
+    Lzma  = 3
+    Lzo   = 4
+    Lz4   = 5
+    Zstd  = 6
+}
+
+struct UImage {
+    magic      u32         "0x27051956"
+    headerCrc  u32         "CRC32 of the header with this field zeroed"
+    time       u32         "creation timestamp (unix seconds)"
+    size       u32         "size of the payload that follows this header"
+    loadAddr   u32         "address the payload is loaded to"
+    entryPoint u32         "address execution starts at"
+    dataCrc    u32         "CRC32 of the payload"
+    os         UImageOs    "operating system"
+    arch       UImageArch  "CPU architecture"
+    imageType  UImageType  "what the payload is"
+    compression UImageComp "how the payload is compressed"
+    name       char[32]    "image name (NUL-padded)"
+}
+"""

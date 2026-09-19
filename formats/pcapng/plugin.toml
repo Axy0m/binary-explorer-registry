@@ -1,0 +1,102 @@
+id = "pcapng"
+name = "pcapng capture"
+version = "1.0.0"
+description = "pcapng capture: walks every block, decoding the common block types."
+author = "Nybble"
+
+[[formats]]
+name = "PCAPNG"
+extension = "pcapng"
+description = "Wireshark/dumpcap block-structured capture"
+confidence = 95
+entry = "Pcapng"
+endian = "le"
+detect = [{ offset = 0, hex = "0A 0D 0D 0A" }]
+schema = """
+// pcapng — the block-structured capture format Wireshark and dumpcap write by
+// default (libpcap's successor). Every block is: type, total length, body, then
+// the same total length again, so the file can be walked in either direction.
+//
+// Each block is walked by its own length, and a pointer-placed `match` decodes
+// the body of the common block types without disturbing that walk.
+
+enum PcapngLinkType : u16 {
+    Null       = 0
+    Ethernet   = 1
+    Ppp        = 9
+    Raw        = 101
+    Ieee80211  = 105
+    Loopback   = 108
+    LinuxSll   = 113
+    Usb        = 189
+    Bluetooth  = 201
+    LinuxSll2  = 276
+}
+
+// Section Header Block — starts every file and every appended section.
+struct PcapngShb {
+    byteOrderMagic u32 "0x1A2B3C4D; byte-swapped in a big-endian section"
+    versionMajor   u16 "major version (1)"
+    versionMinor   u16 "minor version (0)"
+    sectionLength  i64 "bytes in this section, or -1 when unknown"
+}
+
+// Interface Description Block — one per capture interface, in order.
+struct PcapngIdb {
+    linkType PcapngLinkType "link-layer type of this interface"
+    reserved u16
+    snapLen  u32            "max captured bytes per packet (0 = no limit)"
+}
+
+// Enhanced Packet Block — one captured packet.
+struct PcapngEpb {
+    interfaceId u32                "index of the interface this arrived on"
+    timestampHi u32                "high 32 bits of the timestamp"
+    timestampLo u32                "low 32 bits of the timestamp"
+    capturedLen u32                "bytes of the packet stored here"
+    originalLen u32                "length of the packet on the wire"
+    packetData  bytes[capturedLen] "the captured packet bytes"
+}
+
+// Simple Packet Block — a packet with no per-packet metadata.
+struct PcapngSpb {
+    originalLen u32 "length of the packet on the wire"
+}
+
+// Name Resolution Block — address to hostname records.
+struct PcapngNrb {
+    recordType   u16 "1 = IPv4, 2 = IPv6, 0 = end of records"
+    recordLength u16 "length of the record value"
+}
+
+// Interface Statistics Block — counters for one interface.
+struct PcapngIsb {
+    interfaceId u32 "index of the interface these stats describe"
+    timestampHi u32
+    timestampLo u32
+}
+
+struct PcapngBlock {
+    blockType   u32              "block type (0x0A0D0D0A = section header)"
+    blockLength u32              "total block length, both length fields included"
+    bodyLen     = blockLength - 12
+    body        bytes[bodyLen]   "block body: fixed fields then options"
+    trailer     u32              "the total length again, for backwards walking"
+    // Typed view of the body. Placed by pointer, so it reads no bytes of its
+    // own and the block walk above stays exact whatever the type turns out
+    // to be. Options after the fixed fields stay inside `body`.
+    decoded at +8 match blockType {
+        0x0A0D0D0A => PcapngShb
+        1          => PcapngIdb
+        3          => PcapngSpb
+        4          => PcapngNrb
+        5          => PcapngIsb
+        6          => PcapngEpb
+        default    => bytes[0]
+    }
+}
+
+struct Pcapng {
+    blocks repeat PcapngBlock "every block in the file, in order"
+}
+"""

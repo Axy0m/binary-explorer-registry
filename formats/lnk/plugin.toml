@@ -1,0 +1,94 @@
+id = "lnk"
+name = "Windows shortcut"
+version = "1.0.0"
+description = "Windows .lnk ShellLinkHeader: timestamps, target attributes and link flags."
+author = "Nybble"
+
+[[formats]]
+name = "LNK"
+extension = "lnk"
+description = "Windows shell link (shortcut) header"
+confidence = 98
+entry = "ShellLinkHeader"
+endian = "le"
+detect = [
+    { offset = 0, hex = "4C 00 00 00" },
+    { offset = 4, hex = "01 14 02 00 00 00 00 00 C0 00 00 00 00 00 00 46" },
+]
+schema = """
+// Windows shortcut (.lnk) — the 76-byte ShellLinkHeader defined by MS-SHLLINK.
+// A staple of malware triage and forensics: the three FILETIMEs and the target
+// metadata survive being copied around, and the flags say which optional
+// structures follow the header.
+//
+// This pack decodes the fixed header. What comes after it is flag-dependent
+// (target id list, link info, name and path strings, then extra data blocks),
+// so it is left to the analyst.
+
+bitfield LnkFlags : u32 {
+    hasLinkTargetIdList        0
+    hasLinkInfo                1
+    hasName                    2
+    hasRelativePath            3
+    hasWorkingDir              4
+    hasArguments               5
+    hasIconLocation            6
+    isUnicode                  7
+    forceNoLinkInfo            8
+    hasExpString               9
+    runInSeparateProcess       10
+    hasDarwinId                12
+    runAsUser                  13
+    hasExpIcon                 14
+    noPidlAlias                15
+    runWithShimLayer           17
+    forceNoLinkTrack           18
+    enableTargetMetadata       19
+    disableLinkPathTracking    20
+    disableKnownFolderTracking 21
+    disableKnownFolderAlias    22
+    allowLinkToLink            23
+    unaliasOnSave              24
+    preferEnvironmentPath      25
+    keepLocalIdListForUncTarget 26
+}
+
+bitfield LnkFileAttributes : u32 {
+    readOnly          0
+    hidden            1
+    system            2
+    directory         4
+    archive           5
+    normal            7
+    temporary         8
+    sparseFile        9
+    reparsePoint      10
+    compressed        11
+    offline           12
+    notContentIndexed 13
+    encrypted         14
+}
+
+enum LnkShowCommand : u32 {
+    Normal       = 1
+    Maximized    = 3
+    MinNoActive  = 7
+}
+
+struct ShellLinkHeader {
+    headerSize     u32               "always 0x0000004C"
+    linkClsid      bytes[16]         "00021401-0000-0000-C000-000000000046"
+    linkFlags      LnkFlags          "which optional structures follow"
+    fileAttributes LnkFileAttributes "attributes of the target file"
+    creationTime   u64               "target creation time (FILETIME)"
+    accessTime     u64               "target last access time (FILETIME)"
+    writeTime      u64               "target last write time (FILETIME)"
+    fileSize       u32               "low 32 bits of the target size"
+    iconIndex      i32               "index into the icon location"
+    showCommand    LnkShowCommand    "how the target window opens"
+    hotKey         u16               "hotkey: low byte key, high byte modifiers"
+    reserved1      u16
+    reserved2      u32
+    reserved3      u32
+}
+"""
