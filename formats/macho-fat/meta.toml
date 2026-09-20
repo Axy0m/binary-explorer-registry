@@ -1,0 +1,5 @@
+category = "executable"
+tags = ["executable", "macos", "mach-o", "universal", "apple"]
+maintainer = "Nybble"
+homepage = "https://github.com/apple-oss-distributions/xnu/blob/main/EXTERNAL_HEADERS/mach-o/fat.h"
+sample = ""

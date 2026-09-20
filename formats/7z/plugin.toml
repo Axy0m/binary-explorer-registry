@@ -1,0 +1,65 @@
+id = "7z"
+name = "7-Zip archive"
+version = "1.0.0"
+description = "7z signature header: version, CRCs, and the pointer to the (usually compressed) end header."
+author = "Nybble"
+
+[[formats]]
+name = "7Z"
+extension = "7z"
+description = "7-Zip archive signature header"
+confidence = 100
+entry = "SevenZip"
+endian = "le"
+detect = [{ offset = 0, hex = "37 7A BC AF 27 1C" }]
+schema = """
+// 7-Zip (.7z) — a 32-byte signature header at the start of the file, the
+// packed streams, and then the real header at the very end. The start header
+// only tells you where that end header is; everything else (file names, sizes,
+// coders) lives in the end header, and 7-Zip almost always LZMA-compresses it
+// (property id 0x17 = EncodedHeader), so it is shown here as raw bytes with
+// its leading property id decoded.
+
+enum SevenZipProperty : u8 {
+    End                   = 0x00
+    Header                = 0x01
+    ArchiveProperties     = 0x02
+    AdditionalStreamsInfo = 0x03
+    MainStreamsInfo       = 0x04
+    FilesInfo             = 0x05
+    PackInfo              = 0x06
+    UnPackInfo            = 0x07
+    SubStreamsInfo        = 0x08
+    Size                  = 0x09
+    Crc                   = 0x0A
+    Folder                = 0x0B
+    CodersUnPackSize      = 0x0C
+    NumUnPackStream       = 0x0D
+    EmptyStream           = 0x0E
+    EmptyFile             = 0x0F
+    Anti                  = 0x10
+    Name                  = 0x11
+    CTime                 = 0x12
+    ATime                 = 0x13
+    MTime                 = 0x14
+    WinAttributes         = 0x15
+    Comment               = 0x16
+    EncodedHeader         = 0x17
+    StartPos              = 0x18
+    Dummy                 = 0x19
+}
+
+struct SevenZip {
+    signature        bytes[6] "37 7A BC AF 27 1C"
+    versionMajor     u8       "format major version (0)"
+    versionMinor     u8       "format minor version (2..4)"
+    startHeaderCrc   u32      "CRC-32 of the next 20 bytes"
+    nextHeaderOffset u64      "end header position, relative to the end of this 32-byte header"
+    nextHeaderSize   u64      "end header size in bytes"
+    nextHeaderCrc    u32      "CRC-32 of the end header"
+    nextHeaderPos    = nextHeaderOffset + 32
+    // The packed streams occupy bytes 32 .. nextHeaderPos.
+    nextHeaderKind at nextHeaderPos SevenZipProperty      if nextHeaderSize > 0 "0x01 = plain header, 0x17 = compressed (encoded) header"
+    nextHeader     at nextHeaderPos bytes[nextHeaderSize] if nextHeaderSize > 0 "the end header (7z property stream)"
+}
+"""

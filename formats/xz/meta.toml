@@ -1,0 +1,5 @@
+category = "archive"
+tags = ["archive", "compression", "xz", "lzma"]
+maintainer = "Nybble"
+homepage = "https://tukaani.org/xz/xz-file-format.txt"
+sample = ""

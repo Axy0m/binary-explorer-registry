@@ -1,0 +1,5 @@
+category = "audio"
+tags = ["audio", "container", "vorbis", "opus", "flac", "theora", "xiph"]
+maintainer = "Nybble"
+homepage = "https://www.xiph.org/ogg/doc/framing.html"
+sample = ""

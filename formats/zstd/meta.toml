@@ -1,0 +1,5 @@
+category = "archive"
+tags = ["archive", "compression", "zstd", "zstandard"]
+maintainer = "Nybble"
+homepage = "https://www.rfc-editor.org/rfc/rfc8878"
+sample = ""

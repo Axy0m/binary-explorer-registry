@@ -1,0 +1,79 @@
+id = "zstd"
+name = "Zstandard"
+version = "1.0.0"
+description = "Zstandard frames: frame header (window, dictionary id, content size) and a walk of every block up to the checksum."
+author = "Nybble"
+
+[[formats]]
+name = "ZSTD"
+extension = "zst"
+description = "Zstandard compressed frame(s)"
+confidence = 100
+entry = "Zstd"
+endian = "le"
+detect = [{ offset = 0, hex = "28 B5 2F FD" }]
+schema = """
+// Zstandard (RFC 8878) — one or more frames, each a magic number, a frame
+// header, blocks, and an optional checksum. The frame header is variable:
+// the descriptor byte says which of the optional fields are present and how
+// wide the content size is.
+//
+// Block headers are 3 bytes: bit 0 last-block, bits 1-2 type, bits 3-23 size.
+// For an RLE block the size is the decompressed size and the block content is
+// a single byte; for raw and compressed blocks the size is the content length,
+// so the walk can step over every block to the end of the frame.
+
+bitfield ZstdFrameDescriptor : u8 {
+    dictIdFlag           0..1 // dictionary id width: 0 none, 1 = 1 byte, 2 = 2 bytes, 3 = 4 bytes
+    contentChecksum      2    // a 4-byte XXH64 checksum ends the frame
+    reserved             3
+    unused               4
+    singleSegment        5    // no window descriptor; content size is present
+    frameContentSizeFlag 6..7 // content size width: 0 = 0/1 byte, 1 = 2 bytes, 2 = 4 bytes, 3 = 8 bytes
+}
+
+bitfield ZstdWindowDescriptor : u8 {
+    mantissa 0..2 // window size = (1 << (exponent + 10)) * (1 + mantissa / 8)
+    exponent 3..7
+}
+
+bitfield ZstdBlockHeaderLow : u8 {
+    lastBlock 0    // this is the last block of the frame
+    blockType 1..2 // 0 raw, 1 RLE, 2 compressed, 3 reserved
+    sizeLow   3..7 // low 5 bits of the block size
+}
+
+struct ZstdBlock {
+    header    ZstdBlockHeaderLow "last-block bit, block type, low size bits"
+    sizeMid   u8
+    sizeHigh  u8
+    blockSize = header.sizeLow + sizeMid * 32 + sizeHigh * 8192
+    // Raw and compressed blocks carry blockSize bytes; an RLE block carries
+    // the one byte that is repeated blockSize times.
+    content   bytes[blockSize] if header.blockType == 0 "raw (stored) block content"
+    rleByte   u8               if header.blockType == 1 "byte repeated blockSize times"
+    compressed bytes[blockSize] if header.blockType == 2 "compressed block: literals section then sequences section"
+}
+
+struct ZstdFrame {
+    magic            u32                  "0xFD2FB528"
+    descriptor       ZstdFrameDescriptor  "which optional header fields follow"
+    windowDescriptor ZstdWindowDescriptor if descriptor.singleSegment == 0 "decoder window size"
+    dictId8          u8  if descriptor.dictIdFlag == 1 "dictionary id"
+    dictId16         u16 if descriptor.dictIdFlag == 2 "dictionary id"
+    dictId32         u32 if descriptor.dictIdFlag == 3 "dictionary id"
+    // Content size: width from the flag; with flag 0 it is one byte, present
+    // only in single-segment frames.
+    fcsCase          = descriptor.frameContentSizeFlag * 2 + descriptor.singleSegment
+    contentSize8     u8  if fcsCase == 1 "decompressed size"
+    contentSize16    u16 if descriptor.frameContentSizeFlag == 1 "decompressed size minus 256"
+    contentSize32    u32 if descriptor.frameContentSizeFlag == 2 "decompressed size"
+    contentSize64    u64 if descriptor.frameContentSizeFlag == 3 "decompressed size"
+    blocks           repeat ZstdBlock until header.lastBlock "every block of the frame"
+    checksum         u32 if descriptor.contentChecksum "low 32 bits of the XXH64 of the decompressed content"
+}
+
+struct Zstd {
+    frames repeat ZstdFrame "concatenated frames (usually just one)"
+}
+"""

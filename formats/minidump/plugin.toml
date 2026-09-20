@@ -1,0 +1,299 @@
+id = "minidump"
+name = "Windows minidump"
+version = "1.0.0"
+description = "Windows minidump (.dmp): header, stream directory, and decoded system info, exception, thread, module, memory and misc-info streams."
+author = "Nybble"
+
+[[formats]]
+name = "MDMP"
+extension = "dmp"
+description = "Windows minidump crash dump (MiniDumpWriteDump / WER / Breakpad / Crashpad)"
+confidence = 100
+entry = "Minidump"
+endian = "le"
+detect = [{ offset = 0, hex = "4D 44 4D 50 93 A7" }]
+schema = """
+// Windows minidump — the .dmp written by Windows Error Reporting, WinDbg,
+// Visual Studio, Breakpad and Crashpad. A 32-byte header points at a directory
+// of streams; every stream is a (type, size, RVA) triple where the RVA is a
+// plain file offset. This pack follows each directory entry to its stream and
+// decodes the ones an analyst opens first: system info, the exception record,
+// the thread and module lists, memory ranges and misc info. Strings are
+// MINIDUMP_STRINGs: a byte length followed by UTF-16LE text.
+
+bitfield MinidumpType : u64 {
+    withDataSegs                  0
+    withFullMemory                1
+    withHandleData                2
+    filterMemory                  3
+    scanMemory                    4
+    withUnloadedModules           5
+    withIndirectlyReferencedMemory 6
+    filterModulePaths             7
+    withProcessThreadData         8
+    withPrivateReadWriteMemory    9
+    withoutOptionalData           10
+    withFullMemoryInfo            11
+    withThreadInfo                12
+    withCodeSegs                  13
+    withoutAuxiliaryState         14
+    withFullAuxiliaryState        15
+    withPrivateWriteCopyMemory    16
+    ignoreInaccessibleMemory      17
+    withTokenInformation          18
+    withModuleHeaders             19
+    filterTriage                  20
+    withAvxXStateContext          21
+    withIptTrace                  22
+    scanInaccessiblePartialPages  23
+    filterWriteCombinedMemory     24
+}
+
+enum MinidumpStreamType : u32 {
+    Unused                = 0
+    ThreadList            = 3
+    ModuleList            = 4
+    MemoryList            = 5
+    Exception             = 6
+    SystemInfo            = 7
+    ThreadExList          = 8
+    Memory64List          = 9
+    CommentA              = 10
+    CommentW              = 11
+    HandleData            = 12
+    FunctionTable         = 13
+    UnloadedModuleList    = 14
+    MiscInfo              = 15
+    MemoryInfoList        = 16
+    ThreadInfoList        = 17
+    HandleOperationList   = 18
+    Token                 = 19
+    JavaScriptData        = 20
+    SystemMemoryInfo      = 21
+    ProcessVmCounters     = 22
+    IptTrace              = 23
+    ThreadNames           = 24
+}
+
+enum ProcessorArchitecture : u16 {
+    Intel   = 0
+    Mips    = 1
+    Alpha   = 2
+    Ppc     = 3
+    Shx     = 4
+    Arm     = 5
+    Ia64    = 6
+    Alpha64 = 7
+    Msil    = 8
+    Amd64   = 9
+    Ia32OnWin64 = 10
+    Arm64   = 12
+    Unknown = 0xFFFF
+}
+
+enum ProductType : u8 {
+    Workstation      = 1
+    DomainController = 2
+    Server           = 3
+}
+
+enum ExceptionCode : u32 {
+    AccessViolation        = 0xC0000005
+    InPageError            = 0xC0000006
+    IllegalInstruction     = 0xC000001D
+    ArrayBoundsExceeded    = 0xC000008C
+    FloatDivideByZero      = 0xC000008E
+    IntegerDivideByZero    = 0xC0000094
+    IntegerOverflow        = 0xC0000095
+    PrivilegedInstruction  = 0xC0000096
+    StackOverflow          = 0xC00000FD
+    HeapCorruption         = 0xC0000374
+    FailFast               = 0xC0000409
+    Breakpoint             = 0x80000003
+    SingleStep             = 0x80000004
+    DbgPrint               = 0x40010006
+    CppException           = 0xE06D7363
+    ClrException           = 0xE0434352
+}
+
+bitfield MiscInfoFlags : u32 {
+    processId           0
+    processTimes        1
+    processorPowerInfo  2
+    processIntegrity    4
+    processExecuteFlags 5
+    timezone            6
+    protectedProcess    7
+    buildString         8
+    processCookie       9
+}
+
+// MINIDUMP_LOCATION_DESCRIPTOR: where a blob lives in the file.
+struct Location {
+    dataSize u32 "size in bytes"
+    rva      u32 "file offset"
+}
+
+// MINIDUMP_STRING: byte length, then UTF-16LE characters (no terminator counted).
+struct MinidumpString {
+    length u32           "length of the text in bytes"
+    text   bytes[length] "UTF-16LE text"
+}
+
+struct SystemInfo {
+    processorArchitecture ProcessorArchitecture "CPU architecture"
+    processorLevel        u16  "CPU family (x86: 6 = P6 and later)"
+    processorRevision     u16  "CPU model/stepping"
+    numberOfProcessors    u8   "logical processor count"
+    productType           ProductType "workstation / server"
+    majorVersion          u32  "OS major version (10 for Windows 10/11)"
+    minorVersion          u32  "OS minor version"
+    buildNumber           u32  "OS build number"
+    platformId            u32  "2 = Win32 NT; Breakpad: 0x8000 macOS, 0x8201 Linux, 0x8203 Android"
+    csdVersionRva         u32  "RVA of the service pack string"
+    suiteMask             u16  "installed product suites"
+    reserved2             u16
+    cpuInfo               bytes[24] "CPUID vendor/version/features (x86) or processor features"
+    csdVersion at csdVersionRva MinidumpString "service pack / OS description"
+}
+
+struct ExceptionRecord {
+    exceptionCode        ExceptionCode "NTSTATUS-style exception code"
+    exceptionFlags       u32   "0 = continuable, 1 = non-continuable"
+    exceptionRecord      u64   "pointer to a nested exception record"
+    exceptionAddress     u64   "address where the exception occurred"
+    numberParameters     u32   "meaningful entries in exceptionInformation"
+    unusedAlignment      u32
+    exceptionInformation u64[15] "access violation: [0] 0 read / 1 write / 8 execute, [1] faulting address"
+}
+
+struct ExceptionStream {
+    threadId      u32             "id of the faulting thread"
+    alignment     u32
+    record        ExceptionRecord "the exception itself"
+    threadContext Location        "CONTEXT record of the faulting thread"
+}
+
+struct Module {
+    baseOfImage   u64       "load address"
+    sizeOfImage   u32       "mapped image size"
+    checksum      u32       "PE checksum"
+    timeDateStamp u32       "PE timestamp (Unix seconds)"
+    moduleNameRva u32       "RVA of the module path"
+    versionInfo   bytes[52] "VS_FIXEDFILEINFO"
+    cvRecord      Location  "CodeView record (PDB name and GUID)"
+    miscRecord    Location  "misc debug record"
+    reserved0     u64
+    reserved1     u64
+    name at moduleNameRva MinidumpString "module path"
+}
+
+struct ModuleList {
+    numberOfModules u32 "loaded module count"
+    modules         Module[numberOfModules]
+}
+
+struct MemoryDescriptor {
+    startOfMemoryRange u64      "virtual address of the range"
+    memory             Location "where its bytes are in the dump"
+}
+
+struct Thread {
+    threadId      u32              "thread id"
+    suspendCount  u32              "suspend count at dump time"
+    priorityClass u32
+    priority      u32
+    teb           u64              "thread environment block address"
+    stack         MemoryDescriptor "captured stack memory"
+    threadContext Location         "CONTEXT record"
+}
+
+struct ThreadList {
+    numberOfThreads u32 "thread count"
+    threads         Thread[numberOfThreads]
+}
+
+struct MemoryList {
+    numberOfMemoryRanges u32 "captured range count"
+    ranges               MemoryDescriptor[numberOfMemoryRanges]
+}
+
+struct Memory64Descriptor {
+    startOfMemoryRange u64 "virtual address of the range"
+    dataSize           u64 "size in bytes; the data is laid out contiguously from baseRva"
+}
+
+struct Memory64List {
+    numberOfMemoryRanges u64 "captured range count"
+    baseRva              u64 "file offset where the first range's bytes start"
+    ranges               Memory64Descriptor[numberOfMemoryRanges]
+}
+
+struct UnloadedModule {
+    baseOfImage   u64 "load address before unloading"
+    sizeOfImage   u32
+    checksum      u32
+    timeDateStamp u32 "PE timestamp (Unix seconds)"
+    moduleNameRva u32 "RVA of the module path"
+    name at moduleNameRva MinidumpString "module path"
+}
+
+struct UnloadedModuleList {
+    sizeOfHeader    u32 "size of this header (12)"
+    sizeOfEntry     u32 "size of each entry (24)"
+    numberOfEntries u32 "unloaded module count"
+    entries         UnloadedModule[numberOfEntries]
+}
+
+struct ThreadName {
+    threadId        u32 "thread id"
+    rvaOfThreadName u64 "RVA of the name string"
+    name at rvaOfThreadName MinidumpString "thread name"
+}
+
+struct ThreadNames {
+    numberOfThreadNames u32 "named thread count"
+    names               ThreadName[numberOfThreadNames]
+}
+
+struct MiscInfo {
+    sizeOfInfo        u32           "structure size (24 / 44 / 232 / 416 by version)"
+    flags1            MiscInfoFlags "which fields are valid"
+    processId         u32           "crashing process id"
+    processCreateTime u32           "process start (Unix seconds)"
+    processUserTime   u32           "user-mode CPU seconds"
+    processKernelTime u32           "kernel-mode CPU seconds"
+    restLen           = sizeOfInfo - 24
+    rest              bytes[restLen] "later MISC_INFO fields: power info, integrity, timezone, build string"
+}
+
+struct Directory {
+    streamType MinidumpStreamType "what the stream holds"
+    dataSize   u32                "stream size in bytes"
+    rva        u32                "file offset of the stream"
+    stream at rva match streamType {
+        3       => ThreadList
+        4       => ModuleList
+        5       => MemoryList
+        6       => ExceptionStream
+        7       => SystemInfo
+        9       => Memory64List
+        14      => UnloadedModuleList
+        15      => MiscInfo
+        24      => ThreadNames
+        default => bytes[0]
+    }
+}
+
+struct Minidump {
+    signature          string[4]    "always MDMP"
+    version            u16          "format version (0xA793)"
+    implementationVersion u16       "writer-specific"
+    numberOfStreams    u32          "directory entry count"
+    streamDirectoryRva u32          "file offset of the directory"
+    checksum           u32          "unused (0)"
+    timeDateStamp      u32          "dump creation time (Unix seconds)"
+    flags              MinidumpType "MINIDUMP_TYPE: what was captured"
+    directory at streamDirectoryRva Directory[numberOfStreams] "stream directory, each entry followed to its stream"
+}
+"""

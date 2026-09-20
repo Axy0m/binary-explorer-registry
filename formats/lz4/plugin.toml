@@ -1,0 +1,65 @@
+id = "lz4"
+name = "LZ4 frame"
+version = "1.0.0"
+description = "LZ4 frame: descriptor flags, block size, content size, and a walk of every block to the end mark."
+author = "Nybble"
+
+[[formats]]
+name = "LZ4"
+extension = "lz4"
+description = "LZ4 frame format (lz4 CLI, .lz4 files)"
+confidence = 100
+entry = "Lz4Frame"
+endian = "le"
+detect = [{ offset = 0, hex = "04 22 4D 18" }]
+schema = """
+// LZ4 frame format — magic, a frame descriptor, blocks, an end mark (a zero
+// block size) and an optional content checksum. Each block is a 32-bit size
+// whose top bit says the block is stored uncompressed, then the data, then an
+// optional per-block checksum (frame flag). Because that flag lives in the
+// descriptor, the walk comes in two flavours and the right one is chosen by it.
+
+bitfield Lz4Flags : u8 {
+    dictId            0    // a dictionary id follows the descriptor
+    reserved          1
+    contentChecksum   2    // an XXH32 of the whole content ends the frame
+    contentSize       3    // an 8-byte uncompressed size follows
+    blockChecksum     4    // every block is followed by an XXH32
+    blockIndependence 5    // blocks do not depend on earlier blocks
+    version           6..7 // frame version (1)
+}
+
+bitfield Lz4BlockDescriptor : u8 {
+    blockMaxSize 4..6 // 4 = 64 KB, 5 = 256 KB, 6 = 1 MB, 7 = 4 MB
+}
+
+bitfield Lz4BlockSize : u32 {
+    size         0..30 // block data size in bytes (0 = end mark)
+    uncompressed 31    // block is stored, not compressed
+}
+
+struct Lz4Block {
+    header  Lz4BlockSize "size and stored flag"
+    dataLen = header.size
+    data    bytes[dataLen] "block data (LZ4 sequences, or raw bytes if stored)"
+}
+
+struct Lz4CheckedBlock {
+    header   Lz4BlockSize "size and stored flag"
+    dataLen  = header.size
+    data     bytes[dataLen] "block data (LZ4 sequences, or raw bytes if stored)"
+    checksum u32 if dataLen > 0 "XXH32 of the block data"
+}
+
+struct Lz4Frame {
+    magic           u32                "0x184D2204"
+    flags           Lz4Flags           "frame descriptor flags"
+    blockDescriptor Lz4BlockDescriptor "maximum block size"
+    contentSize     u64 if flags.contentSize "uncompressed content size"
+    dictId          u32 if flags.dictId      "dictionary id"
+    headerChecksum  u8                 "second byte of XXH32 over the descriptor"
+    blocks          repeat Lz4Block        until dataLen == 0 if flags.blockChecksum == 0 "blocks, ending with the end mark"
+    checkedBlocks   repeat Lz4CheckedBlock until dataLen == 0 if flags.blockChecksum      "blocks with per-block checksums, ending with the end mark"
+    contentChecksum u32 if flags.contentChecksum "XXH32 of the uncompressed content"
+}
+"""

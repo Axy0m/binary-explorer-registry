@@ -1,0 +1,74 @@
+id = "xz"
+name = "XZ compressed"
+version = "1.0.0"
+description = "XZ stream header (check type) and the first block header: sizes, filter chain and properties."
+author = "Nybble"
+
+[[formats]]
+name = "XZ"
+extension = "xz"
+description = ".xz compressed stream (LZMA2)"
+confidence = 100
+entry = "Xz"
+endian = "le"
+detect = [{ offset = 0, hex = "FD 37 7A 58 5A 00" }]
+schema = """
+// XZ (.xz) — a 12-byte stream header, blocks, an index, and a stream footer.
+// Each block starts with a header whose size is encoded in its first byte
+// ((byte + 1) * 4) and which lists the filter chain (usually just LZMA2, id
+// 0x21). Multi-byte integers in block headers are variable-length: 7 bits
+// per byte with a continuation high bit — LEB128, so varint here.
+//
+// The compressed size is optional in the block header and single-threaded xz
+// leaves it out, so the block data cannot be stepped over in general; this
+// pack decodes the stream header and the first block header.
+
+enum XzCheck : u8 {
+    None   = 0x00
+    Crc32  = 0x01
+    Crc64  = 0x04
+    Sha256 = 0x0A
+}
+
+bitfield XzBlockFlags : u8 {
+    numFiltersMinus1        0..1 // number of filters - 1 (1..4 filters)
+    reserved                2..5
+    compressedSizePresent   6    // a compressed size follows
+    uncompressedSizePresent 7    // an uncompressed size follows
+}
+
+// One filter in the chain: id, then its properties.
+struct XzFilterFlags {
+    filterId  varint "0x21 LZMA2, 0x03 delta, 0x04 x86 BCJ, 0x05 PowerPC, 0x06 IA-64, 0x07 ARM, 0x08 ARM-Thumb, 0x09 SPARC, 0x0A ARM64, 0x0B RISC-V"
+    propsSize varint "size of the properties"
+    props     bytes[propsSize] "filter properties (LZMA2: one byte encoding the dictionary size)"
+}
+
+struct XzStreamHeader {
+    magic       bytes[6] "FD 37 7A 58 5A 00"
+    flagsHigh   u8       "stream flags high byte (always 0)"
+    check       XzCheck  "integrity check type used by every block"
+    crc32       u32      "CRC-32 of the two stream flag bytes"
+}
+
+struct XzBlockHeader {
+    sizeByte         u8           "block header size = (this + 1) * 4; 0x00 would mean the index instead"
+    headerSize       = (sizeByte + 1) * 4
+    flags            XzBlockFlags "filter count and which sizes are present"
+    compressedSize   varint if flags.compressedSizePresent   "compressed size of the block data"
+    uncompressedSize varint if flags.uncompressedSizePresent "uncompressed size of the block data"
+    filter1          XzFilterFlags "first filter"
+    filter2          XzFilterFlags if flags.numFiltersMinus1 > 0 "second filter"
+    filter3          XzFilterFlags if flags.numFiltersMinus1 > 1 "third filter"
+    filter4          XzFilterFlags if flags.numFiltersMinus1 > 2 "fourth filter"
+    // Padding (zeros) runs up to the CRC, which is the last 4 bytes of the header.
+    crcPos           = headerSize - 4
+    crc32            at +crcPos u32 "CRC-32 of the block header"
+    raw              at +0 bytes[headerSize] "the whole block header"
+}
+
+struct Xz {
+    streamHeader XzStreamHeader "stream header"
+    firstBlock   XzBlockHeader  "first block header; its compressed data follows"
+}
+"""

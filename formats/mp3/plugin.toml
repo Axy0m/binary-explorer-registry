@@ -1,0 +1,153 @@
+id = "mp3"
+name = "MP3 (ID3v2 tag)"
+version = "1.0.0"
+description = "ID3v2 tag at the start of an MP3: header, syncsafe size and every frame, with the common text frames decoded."
+author = "Nybble"
+
+[[formats]]
+name = "MP3"
+extension = "mp3"
+description = "MP3 audio with an ID3v2 tag (v2.2, v2.3 or v2.4)"
+confidence = 95
+entry = "Id3v2"
+endian = "be"
+detect = [{ offset = 0, hex = "49 44 33" }]
+schema = """
+// ID3v2 — the metadata tag that starts almost every MP3 file. The tag is a
+// 10-byte header followed by frames; the MPEG audio frames begin right after
+// the tag (at 10 + size). Sizes in the header are "syncsafe": four 7-bit
+// bytes, so no byte ever looks like an MPEG sync (0xFF).
+//
+// The frame layout changed between versions, so the walk picks the frame type
+// by the version byte: v2.2 uses 3-byte ids and sizes, v2.3 a plain 32-bit
+// size, v2.4 a syncsafe size. Common text frames get their text decoded; the
+// walk stops at the first zeroed id (the padding after the last frame).
+
+bitfield Id3Flags : u8 {
+    footer            4 // a 10-byte footer copies the header at the tag's end (v2.4)
+    experimental      5 // tag is in an experimental stage
+    extendedHeader    6 // an extended header follows this one
+    unsynchronisation 7 // unsynchronisation applied to the whole tag
+}
+
+// A 28-bit syncsafe integer: four bytes, 7 bits each, big-endian.
+struct Id3Syncsafe {
+    b0 u8
+    b1 u8
+    b2 u8
+    b3 u8
+    value = b0 * 2097152 + b1 * 16384 + b2 * 128 + b3
+}
+
+enum Id3Encoding : u8 {
+    Latin1  = 0
+    Utf16   = 1
+    Utf16BE = 2
+    Utf8    = 3
+}
+
+bitfield Id3FrameFlags : u16 {
+    dataLengthIndicator 0  // v2.4: a syncsafe data length precedes the body
+    unsynchronised      1  // v2.4: frame body is unsynchronised
+    encrypted           2  // v2.4 (bit 6 in v2.3)
+    compressed          3  // v2.4 (bit 7 in v2.3)
+    groupingIdentity    6  // v2.4 (bit 5 in v2.3)
+    readOnly            12
+    fileAlterPreserve   13
+    tagAlterPreserve    14
+}
+
+// v2.3: 4-char id, plain big-endian size, 16-bit flags.
+struct Id3v23Frame {
+    id       string[4]      "frame id (TIT2 title, TPE1 artist, TALB album, APIC picture, ...)"
+    size     u32            "body size, excluding this 10-byte header"
+    flags    Id3FrameFlags  "frame status and format flags"
+    body     bytes[size]    "frame body"
+    textLen  = size - 1
+    // Text frames: an encoding byte then the text. Decoded by pointer so the
+    // frame walk above is unaffected for non-text frames.
+    encoding at +10 match id {
+        "TIT2" => Id3Encoding  "TPE1" => Id3Encoding  "TALB" => Id3Encoding
+        "TYER" => Id3Encoding  "TRCK" => Id3Encoding  "TCON" => Id3Encoding
+        "TPE2" => Id3Encoding  "TCOM" => Id3Encoding  "TPOS" => Id3Encoding
+        "TPUB" => Id3Encoding  "TSSE" => Id3Encoding  "TXXX" => Id3Encoding
+        "TENC" => Id3Encoding  "TCOP" => Id3Encoding  "TDRC" => Id3Encoding
+        default => bytes[0]
+    }
+    text at +11 match id {
+        "TIT2" => string[textLen]  "TPE1" => string[textLen]  "TALB" => string[textLen]
+        "TYER" => string[textLen]  "TRCK" => string[textLen]  "TCON" => string[textLen]
+        "TPE2" => string[textLen]  "TCOM" => string[textLen]  "TPOS" => string[textLen]
+        "TPUB" => string[textLen]  "TSSE" => string[textLen]  "TXXX" => string[textLen]
+        "TENC" => string[textLen]  "TCOP" => string[textLen]  "TDRC" => string[textLen]
+        default => bytes[0]
+    }
+}
+
+// v2.4: same shape as v2.3 but the size is syncsafe.
+struct Id3v24Frame {
+    id       string[4]      "frame id (TIT2 title, TPE1 artist, TALB album, TDRC date, APIC picture, ...)"
+    sizeRaw  Id3Syncsafe    "syncsafe body size"
+    size     = sizeRaw.value
+    flags    Id3FrameFlags  "frame status and format flags"
+    body     bytes[size]    "frame body"
+    textLen  = size - 1
+    encoding at +10 match id {
+        "TIT2" => Id3Encoding  "TPE1" => Id3Encoding  "TALB" => Id3Encoding
+        "TDRC" => Id3Encoding  "TRCK" => Id3Encoding  "TCON" => Id3Encoding
+        "TPE2" => Id3Encoding  "TCOM" => Id3Encoding  "TPOS" => Id3Encoding
+        "TPUB" => Id3Encoding  "TSSE" => Id3Encoding  "TXXX" => Id3Encoding
+        "TENC" => Id3Encoding  "TCOP" => Id3Encoding  "TYER" => Id3Encoding
+        default => bytes[0]
+    }
+    text at +11 match id {
+        "TIT2" => string[textLen]  "TPE1" => string[textLen]  "TALB" => string[textLen]
+        "TDRC" => string[textLen]  "TRCK" => string[textLen]  "TCON" => string[textLen]
+        "TPE2" => string[textLen]  "TCOM" => string[textLen]  "TPOS" => string[textLen]
+        "TPUB" => string[textLen]  "TSSE" => string[textLen]  "TXXX" => string[textLen]
+        "TENC" => string[textLen]  "TCOP" => string[textLen]  "TYER" => string[textLen]
+        default => bytes[0]
+    }
+}
+
+// v2.2: 3-char id and a 24-bit size, no flags.
+struct Id3v22Frame {
+    id      string[3] "frame id (TT2 title, TP1 artist, TAL album, PIC picture, ...)"
+    s0      u8
+    s1      u8
+    s2      u8
+    size    = s0 * 65536 + s1 * 256 + s2
+    body    bytes[size] "frame body"
+    textLen = size - 1
+    encoding at +6 match id {
+        "TT2" => Id3Encoding  "TP1" => Id3Encoding  "TAL" => Id3Encoding
+        "TYE" => Id3Encoding  "TRK" => Id3Encoding  "TCO" => Id3Encoding
+        default => bytes[0]
+    }
+    text at +7 match id {
+        "TT2" => string[textLen]  "TP1" => string[textLen]  "TAL" => string[textLen]
+        "TYE" => string[textLen]  "TRK" => string[textLen]  "TCO" => string[textLen]
+        default => bytes[0]
+    }
+}
+
+struct Id3v2 {
+    magic        string[3]   "always ID3"
+    versionMajor u8          "ID3v2 version: 2, 3 or 4"
+    revision     u8          "revision (0)"
+    flags        Id3Flags    "tag-level flags"
+    sizeRaw      Id3Syncsafe "syncsafe tag size, excluding this header"
+    tagSize      = sizeRaw.value
+    audioOffset  = tagSize + 10
+    // Extended header (rare). v2.3 semantics: the size excludes its own 4 bytes.
+    extendedSize u32                 if flags.extendedHeader
+    extended     bytes[extendedSize] if flags.extendedHeader
+    // One frame walk per version. Each stops at the padding (a zeroed id);
+    // a tag with no padding ends when the audio frames fail to parse as a frame.
+    frames22 repeat Id3v22Frame until id == "" if versionMajor == 2
+    frames23 repeat Id3v23Frame until id == "" if versionMajor == 3
+    frames24 repeat Id3v24Frame until id == "" if versionMajor == 4
+    // The first MPEG audio frame starts right after the tag: sync 0xFFE0+.
+    audioSync at audioOffset bytes[4] "first bytes after the tag: the first MPEG frame header (FF Fx / FF Ex)"
+}
+"""

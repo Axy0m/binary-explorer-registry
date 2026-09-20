@@ -1,0 +1,230 @@
+id = "rar"
+name = "RAR archive"
+version = "1.0.0"
+description = "RAR 5.0 (main header and first file header) and RAR 1.5-4.x (full block walk with decoded main and file headers)."
+author = "Nybble"
+
+[[formats]]
+name = "RAR5"
+extension = "rar"
+description = "RAR 5.0 archive"
+confidence = 100
+entry = "Rar5"
+endian = "le"
+detect = [{ offset = 0, hex = "52 61 72 21 1A 07 01 00" }]
+schema = """
+// RAR 5.0 — an 8-byte signature, then a sequence of blocks. Every block is a
+// CRC-32, a variable-length header size, and the header; most block fields
+// are vints: 7 bits per byte with a continuation high bit, which is exactly
+// LEB128 (varint here).
+//
+// The header size counts from the header type to the end of the extra area,
+// and its own encoded width varies, so a generic block walk is not possible
+// declaratively. This pack decodes the main archive header and the first file
+// header — which for a typical archive is the interesting part.
+
+// Header flags are vints too, but all defined bits fit in one byte.
+bitfield Rar5HeaderFlags : u8 {
+    extraArea         0 // an extra area follows the header fields
+    dataArea          1 // a data area follows the header
+    skipIfUnknown     2 // blocks with unknown type may be skipped
+    dataContinues     3 // data continues from the previous volume
+    dataContinuesNext 4 // data continues in the next volume
+    dependsOnPrev     5 // block depends on the preceding block
+    preserveChild     6 // preserve a child block if the host is modified
+}
+
+bitfield Rar5ArchiveFlags : u8 {
+    volume       0 // part of a multi-volume set
+    volumeNumber 1 // a volume number field follows
+    solid        2 // solid archive
+    recovery     3 // recovery record present
+    locked       4 // archive is locked
+}
+
+bitfield Rar5FileFlags : u8 {
+    directory       0 // entry is a directory
+    timePresent     1 // a modification time (Unix seconds) follows
+    crcPresent      2 // a CRC-32 of the unpacked data follows
+    unpackedUnknown 3 // unpacked size is unknown
+}
+
+enum Rar5HeaderType : u8 {
+    Main       = 1
+    File       = 2
+    Service    = 3
+    Encryption = 4
+    EndArchive = 5
+}
+
+struct Rar5MainHeader {
+    crc          u32              "CRC-32 of the header (size field onwards)"
+    headerSize   varint           "header size from the type field to the end of the extra area"
+    headerType   Rar5HeaderType   "1 = main archive header"
+    headerFlags  Rar5HeaderFlags  "common header flags"
+    extraSize    varint           if headerFlags.extraArea "extra area size"
+    archiveFlags Rar5ArchiveFlags "archive-level flags"
+    volumeNumber varint           if archiveFlags.volumeNumber "volume number (0-based)"
+}
+
+struct Rar5FileHeader {
+    crc             u32             "CRC-32 of the header (size field onwards)"
+    headerSize      varint          "header size from the type field to the end of the extra area"
+    headerType      Rar5HeaderType  "2 = file header, 3 = service header"
+    headerFlags     Rar5HeaderFlags "common header flags"
+    extraSize       varint          if headerFlags.extraArea "extra area size (timestamps, hashes, ...)"
+    dataSize        varint          if headerFlags.dataArea  "packed data size following the header"
+    fileFlags       Rar5FileFlags   "file-specific flags"
+    unpackedSize    varint          "unpacked file size"
+    attributes      varint          "OS-specific file attributes"
+    mtime           u32             if fileFlags.timePresent "modification time, Unix seconds"
+    dataCrc         u32             if fileFlags.crcPresent  "CRC-32 of the unpacked data"
+    compressionInfo varint          "bits 0-5 version, 6 solid, 7-9 method (0 = store), 10-13 dictionary size"
+    hostOs          varint          "0 = Windows, 1 = Unix"
+    nameLength      varint          "file name length in bytes"
+    name            string[nameLength] "file name (UTF-8, / separated)"
+}
+
+struct Rar5 {
+    signature bytes[8]       "52 61 72 21 1A 07 01 00"
+    main      Rar5MainHeader "main archive header"
+    // The main header is tiny, so its size vint is a single byte: the next
+    // block starts at 8 (signature) + 4 (crc) + 1 (size vint) + headerSize.
+    firstFilePos = main.headerSize + 13
+    firstFile at firstFilePos Rar5FileHeader "first file (or service) header"
+}
+"""
+
+[[formats]]
+name = "RAR4"
+extension = "rar"
+description = "RAR 1.5 - 4.x archive"
+confidence = 100
+entry = "Rar4"
+endian = "le"
+detect = [{ offset = 0, hex = "52 61 72 21 1A 07 00" }]
+schema = """
+// RAR 1.5 - 4.x — a 7-byte signature, then blocks: CRC-16, type, flags, header
+// size, and (when bit 15 of the flags is set) a 32-bit size of data that
+// follows the header. That makes every block walkable, so this pack lists all
+// of them and decodes the main and file headers by pointer.
+
+enum Rar4BlockType : u8 {
+    Marker      = 0x72
+    Main        = 0x73
+    File        = 0x74
+    Comment     = 0x75
+    ExtraInfo   = 0x76
+    Subblock    = 0x77
+    Recovery    = 0x78
+    AuthInfo    = 0x79
+    NewSubblock = 0x7A
+    EndArchive  = 0x7B
+}
+
+bitfield Rar4BlockFlags : u16 {
+    skipIfUnknown 14 // block may be skipped if its type is unknown
+    longBlock     15 // a 32-bit data size follows the header size
+}
+
+bitfield Rar4MainFlags : u16 {
+    volume            0  // multi-volume archive
+    comment           1  // an (old style) comment block follows
+    locked            2  // archive is locked
+    solid             3  // solid archive
+    newNumbering      4  // new volume naming scheme
+    authInfo          5  // authenticity information present
+    recovery          6  // recovery record present
+    passwordEncrypted 7  // headers are encrypted
+    firstVolume       8  // this is the first volume
+    encryptVer        9  // encryption version field present
+    longBlock         15
+}
+
+bitfield Rar4FileFlags : u16 {
+    splitBefore 0    // continued from the previous volume
+    splitAfter  1    // continues in the next volume
+    password    2    // file is encrypted
+    comment     3    // a file comment follows
+    solid       4    // uses data from previous files
+    dictionary  5..7 // dictionary size: 0 = 64K .. 6 = 4096K, 7 = directory
+    largeFile   8    // 64-bit sizes: high 32 bits follow
+    unicode     9    // file name contains a Unicode variant
+    salt        10   // an 8-byte salt follows
+    version     11   // file versioning
+    extTime     12   // extended time fields follow
+    longBlock   15
+}
+
+enum Rar4HostOs : u8 {
+    MsDos = 0
+    Os2   = 1
+    Win32 = 2
+    Unix  = 3
+    MacOs = 4
+    BeOs  = 5
+}
+
+enum Rar4Method : u8 {
+    Store   = 0x30
+    Fastest = 0x31
+    Fast    = 0x32
+    Normal  = 0x33
+    Good    = 0x34
+    Best    = 0x35
+}
+
+struct Rar4MainHeader {
+    crc       u16           "CRC-16 of the header"
+    type      Rar4BlockType "0x73"
+    flags     Rar4MainFlags "archive flags"
+    headSize  u16           "header size (13)"
+    reserved1 u16
+    reserved2 u32
+}
+
+struct Rar4FileHeader {
+    crc          u16           "CRC-16 of the header"
+    type         Rar4BlockType "0x74"
+    flags        Rar4FileFlags "file flags"
+    headSize     u16           "header size including the file name"
+    packSize     u32           "packed size (low 32 bits)"
+    unpSize      u32           "unpacked size (low 32 bits)"
+    hostOs       Rar4HostOs    "OS the file was archived on"
+    fileCrc      u32           "CRC-32 of the unpacked file"
+    fileTime     u32           "modification time (MS-DOS date/time)"
+    unpVer       u8            "RAR version needed to extract (x10: 29 = 2.9)"
+    method       Rar4Method    "compression method"
+    nameSize     u16           "file name length"
+    attr         u32           "file attributes (host OS specific)"
+    highPackSize u32           if flags.largeFile "high 32 bits of the packed size"
+    highUnpSize  u32           if flags.largeFile "high 32 bits of the unpacked size"
+    fileName     string[nameSize] "file name"
+    salt         bytes[8]      if flags.salt "encryption salt"
+}
+
+struct Rar4Block {
+    crc      u16            "CRC-16 of the header"
+    type     Rar4BlockType  "block type"
+    flags    Rar4BlockFlags "block flags (bit 15: data follows)"
+    headSize u16            "header size, this field included"
+    addSize  u32            if flags.longBlock "size of the data after the header"
+    // Remaining header bytes: 7 fixed bytes so far, plus 4 more if addSize is present.
+    restShort   = headSize - 7
+    restLong    = headSize - 11
+    headerRest  bytes[restShort] if flags.longBlock == 0 "rest of the header"
+    headerRest2 bytes[restLong]  if flags.longBlock      "rest of the header"
+    data        bytes[addSize]   if flags.longBlock      "block data (packed file contents)"
+    // Typed view of the whole header, by pointer, for the block types that matter.
+    decoded at +0 match type {
+        0x73    => Rar4MainHeader
+        0x74    => Rar4FileHeader
+        default => bytes[0]
+    }
+}
+
+struct Rar4 {
+    signature bytes[7] "52 61 72 21 1A 07 00"
+    blocks repeat Rar4Block until type == 0x7B "every block, up to the end-of-archive block"
+}
+"""

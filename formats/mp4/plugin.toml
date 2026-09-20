@@ -1,0 +1,163 @@
+id = "mp4"
+name = "MP4 / ISO base media"
+version = "1.0.0"
+description = "ISO base media (MP4, MOV, M4A, HEIC, AVIF): walks every top-level box and decodes ftyp, mvhd, tkhd, mdhd and hdlr."
+author = "Nybble"
+
+[[formats]]
+name = "MP4"
+extension = "mp4"
+description = "ISO base media file (MP4 / MOV / M4A / 3GP / HEIC / AVIF)"
+confidence = 90
+entry = "IsoMedia"
+endian = "be"
+detect = [{ offset = 4, hex = "66 74 79 70" }]
+schema = """
+// ISO base media file format (ISO/IEC 14496-12) — the box structure shared by
+// MP4, QuickTime MOV, M4A, 3GP and the HEIF family. A file is a sequence of
+// boxes: 32-bit size, 4-char type, then the body. A size of 1 means a 64-bit
+// size follows (large mdat); 0 means "to end of file".
+//
+// This pack walks the top-level boxes by size and decodes the headers that
+// carry the metadata: ftyp, and inside moov the mvhd (duration, timescale),
+// plus tkhd / mdhd / hdlr by descending into the first two children of each
+// container. A declarative walk cannot be told where a container ends, so
+// containers show only the children that are guaranteed to be there.
+
+struct Ftyp {
+    majorBrand   string[4] "brand best describing the file (isom, mp42, qt  , M4A , heic, avif)"
+    minorVersion u32       "minor version of the major brand"
+    // compatible brands (4 chars each) follow to the end of the box
+}
+
+// Movie header (a FullBox: version + 24-bit flags, then the fields).
+struct Mvhd {
+    version          u8       "0 = 32-bit times, 1 = 64-bit times"
+    flags            bytes[3]
+    creationTime     u32      if version == 0 "seconds since 1904-01-01 UTC"
+    modificationTime u32      if version == 0 "seconds since 1904-01-01 UTC"
+    timescale        u32      if version == 0 "time units per second"
+    duration         u32      if version == 0 "presentation length in timescale units"
+    creationTime64     u64    if version == 1 "seconds since 1904-01-01 UTC"
+    modificationTime64 u64    if version == 1 "seconds since 1904-01-01 UTC"
+    timescale64        u32    if version == 1 "time units per second"
+    duration64         u64    if version == 1 "presentation length in timescale units"
+    rate             i32      "preferred playback rate, 16.16 fixed point (0x00010000 = 1.0)"
+    volume           i16      "preferred volume, 8.8 fixed point (0x0100 = full)"
+    reserved         bytes[10]
+    matrix           i32[9]   "video transformation matrix"
+    preDefined       bytes[24]
+    nextTrackId      u32      "next available track id"
+}
+
+// Track header.
+struct Tkhd {
+    version          u8       "0 = 32-bit times, 1 = 64-bit times"
+    flags            bytes[3] "0x000001 enabled, 0x000002 in movie, 0x000004 in preview"
+    creationTime     u32      if version == 0 "seconds since 1904-01-01 UTC"
+    modificationTime u32      if version == 0 "seconds since 1904-01-01 UTC"
+    trackId          u32      if version == 0 "track id (never 0)"
+    reserved0        u32      if version == 0
+    duration         u32      if version == 0 "track length in movie timescale units"
+    creationTime64     u64    if version == 1 "seconds since 1904-01-01 UTC"
+    modificationTime64 u64    if version == 1 "seconds since 1904-01-01 UTC"
+    trackId64          u32    if version == 1 "track id (never 0)"
+    reserved064        u32    if version == 1
+    duration64         u64    if version == 1 "track length in movie timescale units"
+    reserved1        u32[2]
+    layer            i16      "front-to-back ordering (0 = normal)"
+    alternateGroup   i16      "alternate track group (0 = none)"
+    volume           i16      "8.8 fixed point; 0x0100 for audio, 0 for video"
+    reserved2        u16
+    matrix           i32[9]   "video transformation matrix"
+    width            u32      "visual presentation width, 16.16 fixed point"
+    height           u32      "visual presentation height, 16.16 fixed point"
+}
+
+// Media header.
+struct Mdhd {
+    version          u8       "0 = 32-bit times, 1 = 64-bit times"
+    flags            bytes[3]
+    creationTime     u32      if version == 0 "seconds since 1904-01-01 UTC"
+    modificationTime u32      if version == 0 "seconds since 1904-01-01 UTC"
+    timescale        u32      if version == 0 "time units per second for this media"
+    duration         u32      if version == 0 "media length in its timescale"
+    creationTime64     u64    if version == 1 "seconds since 1904-01-01 UTC"
+    modificationTime64 u64    if version == 1 "seconds since 1904-01-01 UTC"
+    timescale64        u32    if version == 1 "time units per second for this media"
+    duration64         u64    if version == 1 "media length in its timescale"
+    language         u16      "ISO 639-2 code, three 5-bit letters (0x55C4 = und)"
+    preDefined       u16
+}
+
+// Handler reference: what kind of media a track carries.
+struct Hdlr {
+    version     u8
+    flags       bytes[3]
+    preDefined  u32
+    handlerType string[4] "vide video, soun audio, hint, meta, text, subt subtitles"
+    reserved    u32[3]
+    name        cstring   "human-readable handler name"
+}
+
+// A box whose 32-bit size is 1: the real size is the 64-bit field that follows.
+struct LargeBox {
+    largesize u64 "64-bit box size, header included"
+    bodyLen   = largesize - 16
+    body      bytes[bodyLen] "box body"
+}
+
+// A pure container: only the first child is decoded (see the note at the top).
+struct Container {
+    first Box "first child box"
+}
+
+// A container that always has at least two children (moov, trak, mdia, minf):
+// the second child is found by stepping over the first.
+struct Container2 {
+    first     Box "first child box"
+    secondPos = first.size
+    second    at +secondPos Box "second child box"
+}
+
+// A FullBox container (meta): version and flags precede the children.
+struct FullContainer {
+    version u8
+    flags   bytes[3]
+    first   Box "first child box"
+}
+
+struct Box {
+    size    u32       "box size including this header; 1 = 64-bit size follows, 0 = to end of file"
+    type    string[4] "four-character box type"
+    large   LargeBox  if size == 1
+    toEnd   bytes[*]  if size == 0 "box body, running to the end of the file"
+    bodyLen = size - 8
+    body    bytes[bodyLen] if size > 7 "box body"
+    // Typed view of the body, placed by pointer so the size walk is untouched.
+    decoded at +8 match type {
+        "ftyp" => Ftyp
+        "mvhd" => Mvhd
+        "tkhd" => Tkhd
+        "mdhd" => Mdhd
+        "hdlr" => Hdlr
+        "moov" => Container2
+        "trak" => Container2
+        "mdia" => Container2
+        "minf" => Container2
+        "stbl" => Container
+        "edts" => Container
+        "dinf" => Container
+        "udta" => Container
+        "moof" => Container
+        "traf" => Container
+        "mvex" => Container
+        "meta" => FullContainer
+        default => bytes[0]
+    }
+}
+
+struct IsoMedia {
+    boxes repeat Box "top-level boxes, in file order"
+}
+"""

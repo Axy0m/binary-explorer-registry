@@ -1,0 +1,5 @@
+category = "archive"
+tags = ["archive", "compression", "lz4"]
+maintainer = "Nybble"
+homepage = "https://github.com/lz4/lz4/blob/dev/doc/lz4_Frame_format.md"
+sample = ""

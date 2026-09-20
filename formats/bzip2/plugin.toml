@@ -1,0 +1,30 @@
+id = "bzip2"
+name = "bzip2 compressed"
+version = "1.0.0"
+description = "bzip2 stream header: block size level, first block magic and its CRC."
+author = "Nybble"
+
+[[formats]]
+name = "BZIP2"
+extension = "bz2"
+description = ".bz2 compressed stream"
+confidence = 100
+entry = "Bzip2"
+endian = "be"
+detect = [{ offset = 0, hex = "42 5A 68" }]
+schema = """
+// bzip2 — "BZh" plus a block-size digit, then blocks. Each block opens with a
+// 48-bit magic (pi: 31 41 59 26 53 59) and the CRC-32 of its uncompressed data;
+// everything after that is a bit-packed Huffman/BWT stream and later blocks are
+// not byte-aligned, so only the first block header is decoded. The stream ends
+// with the magic sqrt(pi) (17 72 45 38 50 90) and a combined CRC.
+
+struct Bzip2 {
+    magic      string[2] "always BZ"
+    version    char      "always h (Huffman)"
+    level      char      "block size: 1..9, in units of 100 kB"
+    blockMagic bytes[6]  "31 41 59 26 53 59 (a compressed block follows)"
+    blockCrc   u32       "CRC-32 of this block's uncompressed data"
+    randomised u8        "bit 7: obsolete randomisation flag; the rest is the bit-packed block"
+}
+"""

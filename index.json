@@ -1,7 +1,30 @@
 {
   "version": 1,
-  "count": 28,
+  "count": 40,
   "formats": [
+    {
+      "id": "7z",
+      "name": "7-Zip archive",
+      "version": "1.0.0",
+      "description": "7z signature header: version, CRCs, and the pointer to the (usually compressed) end header.",
+      "author": "Nybble",
+      "category": "archive",
+      "tags": [
+        "archive",
+        "compression",
+        "7zip",
+        "lzma"
+      ],
+      "formats": [
+        {
+          "name": "7Z",
+          "extension": "7z",
+          "detects": true,
+          "confidence": 100
+        }
+      ],
+      "path": "formats/7z/plugin.toml"
+    },
     {
       "id": "aiff",
       "name": "AIFF audio",
@@ -93,6 +116,28 @@
       "path": "formats/bmp/plugin.toml"
     },
     {
+      "id": "bzip2",
+      "name": "bzip2 compressed",
+      "version": "1.0.0",
+      "description": "bzip2 stream header: block size level, first block magic and its CRC.",
+      "author": "Nybble",
+      "category": "archive",
+      "tags": [
+        "archive",
+        "compression",
+        "bzip2"
+      ],
+      "formats": [
+        {
+          "name": "BZIP2",
+          "extension": "bz2",
+          "detects": true,
+          "confidence": 100
+        }
+      ],
+      "path": "formats/bzip2/plugin.toml"
+    },
+    {
       "id": "dex",
       "name": "Dalvik DEX",
       "version": "1.0.0",
@@ -114,6 +159,31 @@
         }
       ],
       "path": "formats/dex/plugin.toml"
+    },
+    {
+      "id": "dtb",
+      "name": "Device tree blob",
+      "version": "1.0.0",
+      "description": "Flattened device tree (.dtb / FIT): header, memory reservation map, the full structure block token walk and the strings block.",
+      "author": "Nybble",
+      "category": "firmware",
+      "tags": [
+        "firmware",
+        "embedded",
+        "devicetree",
+        "linux",
+        "u-boot",
+        "fit"
+      ],
+      "formats": [
+        {
+          "name": "DTB",
+          "extension": "dtb",
+          "detects": true,
+          "confidence": 100
+        }
+      ],
+      "path": "formats/dtb/plugin.toml"
     },
     {
       "id": "ext4",
@@ -322,6 +392,28 @@
       "path": "formats/lnk/plugin.toml"
     },
     {
+      "id": "lz4",
+      "name": "LZ4 frame",
+      "version": "1.0.0",
+      "description": "LZ4 frame: descriptor flags, block size, content size, and a walk of every block to the end mark.",
+      "author": "Nybble",
+      "category": "archive",
+      "tags": [
+        "archive",
+        "compression",
+        "lz4"
+      ],
+      "formats": [
+        {
+          "name": "LZ4",
+          "extension": "lz4",
+          "detects": true,
+          "confidence": 100
+        }
+      ],
+      "path": "formats/lz4/plugin.toml"
+    },
+    {
       "id": "macho",
       "name": "Mach-O executable",
       "version": "1.0.0",
@@ -345,6 +437,42 @@
       "path": "formats/macho/plugin.toml"
     },
     {
+      "id": "macho-fat",
+      "name": "Mach-O universal binary",
+      "version": "1.0.0",
+      "description": "Apple fat / universal binary: the architecture slice table, with each slice's Mach-O magic peeked.",
+      "author": "Nybble",
+      "category": "executable",
+      "tags": [
+        "executable",
+        "macos",
+        "mach-o",
+        "universal",
+        "apple"
+      ],
+      "formats": [
+        {
+          "name": "Universal binary",
+          "extension": "dylib",
+          "detects": true,
+          "confidence": 98
+        },
+        {
+          "name": "Universal binary (3 slices)",
+          "extension": "dylib",
+          "detects": true,
+          "confidence": 98
+        },
+        {
+          "name": "Universal binary (64-bit table)",
+          "extension": "dylib",
+          "detects": true,
+          "confidence": 100
+        }
+      ],
+      "path": "formats/macho-fat/plugin.toml"
+    },
+    {
       "id": "mbr",
       "name": "MBR partition table",
       "version": "1.0.0",
@@ -366,6 +494,106 @@
         }
       ],
       "path": "formats/mbr/plugin.toml"
+    },
+    {
+      "id": "minidump",
+      "name": "Windows minidump",
+      "version": "1.0.0",
+      "description": "Windows minidump (.dmp): header, stream directory, and decoded system info, exception, thread, module, memory and misc-info streams.",
+      "author": "Nybble",
+      "category": "system",
+      "tags": [
+        "system",
+        "windows",
+        "crash-dump",
+        "forensics",
+        "debugging"
+      ],
+      "formats": [
+        {
+          "name": "MDMP",
+          "extension": "dmp",
+          "detects": true,
+          "confidence": 100
+        }
+      ],
+      "path": "formats/minidump/plugin.toml"
+    },
+    {
+      "id": "mp3",
+      "name": "MP3 (ID3v2 tag)",
+      "version": "1.0.0",
+      "description": "ID3v2 tag at the start of an MP3: header, syncsafe size and every frame, with the common text frames decoded.",
+      "author": "Nybble",
+      "category": "audio",
+      "tags": [
+        "audio",
+        "mp3",
+        "id3",
+        "metadata",
+        "mpeg"
+      ],
+      "formats": [
+        {
+          "name": "MP3",
+          "extension": "mp3",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/mp3/plugin.toml"
+    },
+    {
+      "id": "mp4",
+      "name": "MP4 / ISO base media",
+      "version": "1.0.0",
+      "description": "ISO base media (MP4, MOV, M4A, HEIC, AVIF): walks every top-level box and decodes ftyp, mvhd, tkhd, mdhd and hdlr.",
+      "author": "Nybble",
+      "category": "video",
+      "tags": [
+        "video",
+        "audio",
+        "container",
+        "mp4",
+        "mov",
+        "isobmff",
+        "heif"
+      ],
+      "formats": [
+        {
+          "name": "MP4",
+          "extension": "mp4",
+          "detects": true,
+          "confidence": 90
+        }
+      ],
+      "path": "formats/mp4/plugin.toml"
+    },
+    {
+      "id": "ogg",
+      "name": "Ogg container",
+      "version": "1.0.0",
+      "description": "Ogg first page: page header, segment table and the codec identification header (Vorbis, Opus, FLAC, Theora, Speex).",
+      "author": "Nybble",
+      "category": "audio",
+      "tags": [
+        "audio",
+        "container",
+        "vorbis",
+        "opus",
+        "flac",
+        "theora",
+        "xiph"
+      ],
+      "formats": [
+        {
+          "name": "OGG",
+          "extension": "ogg",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/ogg/plugin.toml"
     },
     {
       "id": "pcap",
@@ -434,6 +662,35 @@
         }
       ],
       "path": "formats/qoi/plugin.toml"
+    },
+    {
+      "id": "rar",
+      "name": "RAR archive",
+      "version": "1.0.0",
+      "description": "RAR 5.0 (main header and first file header) and RAR 1.5-4.x (full block walk with decoded main and file headers).",
+      "author": "Nybble",
+      "category": "archive",
+      "tags": [
+        "archive",
+        "compression",
+        "rar",
+        "winrar"
+      ],
+      "formats": [
+        {
+          "name": "RAR5",
+          "extension": "rar",
+          "detects": true,
+          "confidence": 100
+        },
+        {
+          "name": "RAR4",
+          "extension": "rar",
+          "detects": true,
+          "confidence": 100
+        }
+      ],
+      "path": "formats/rar/plugin.toml"
     },
     {
       "id": "squashfs",
@@ -652,6 +909,52 @@
         }
       ],
       "path": "formats/woff/plugin.toml"
+    },
+    {
+      "id": "xz",
+      "name": "XZ compressed",
+      "version": "1.0.0",
+      "description": "XZ stream header (check type) and the first block header: sizes, filter chain and properties.",
+      "author": "Nybble",
+      "category": "archive",
+      "tags": [
+        "archive",
+        "compression",
+        "xz",
+        "lzma"
+      ],
+      "formats": [
+        {
+          "name": "XZ",
+          "extension": "xz",
+          "detects": true,
+          "confidence": 100
+        }
+      ],
+      "path": "formats/xz/plugin.toml"
+    },
+    {
+      "id": "zstd",
+      "name": "Zstandard",
+      "version": "1.0.0",
+      "description": "Zstandard frames: frame header (window, dictionary id, content size) and a walk of every block up to the checksum.",
+      "author": "Nybble",
+      "category": "archive",
+      "tags": [
+        "archive",
+        "compression",
+        "zstd",
+        "zstandard"
+      ],
+      "formats": [
+        {
+          "name": "ZSTD",
+          "extension": "zst",
+          "detects": true,
+          "confidence": 100
+        }
+      ],
+      "path": "formats/zstd/plugin.toml"
     }
   ]
 }

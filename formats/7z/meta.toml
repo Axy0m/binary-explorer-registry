@@ -1,0 +1,5 @@
+category = "archive"
+tags = ["archive", "compression", "7zip", "lzma"]
+maintainer = "Nybble"
+homepage = "https://py7zr.readthedocs.io/en/latest/archive_format.html"
+sample = ""

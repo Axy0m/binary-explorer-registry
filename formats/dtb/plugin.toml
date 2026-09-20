@@ -1,0 +1,90 @@
+id = "dtb"
+name = "Device tree blob"
+version = "1.0.0"
+description = "Flattened device tree (.dtb / FIT): header, memory reservation map, the full structure block token walk and the strings block."
+author = "Nybble"
+
+[[formats]]
+name = "DTB"
+extension = "dtb"
+description = "Flattened device tree blob (also U-Boot FIT images)"
+confidence = 100
+entry = "Fdt"
+endian = "be"
+detect = [{ offset = 0, hex = "D0 0D FE ED" }]
+schema = """
+// Flattened device tree (devicetree specification chapter 5) — the .dtb the
+// Linux kernel and U-Boot consume, and the container of U-Boot FIT images.
+// Big-endian throughout: a 40-byte header, a memory reservation map, the
+// structure block (a token stream of BEGIN_NODE / PROP / END_NODE) and a
+// strings block holding the property names.
+//
+// The structure block is walked token by token. Node names are NUL-terminated
+// and padded to 4 bytes; the name is decoded by pointer and the padded span is
+// consumed in 4-byte chunks until one contains the terminating NUL. Property
+// names are offsets into the strings block, which is listed in full.
+
+enum FdtToken : u32 {
+    BeginNode = 1
+    EndNode   = 2
+    Prop      = 3
+    Nop       = 4
+    End       = 9
+}
+
+// One reserved physical memory range; the map ends with an all-zero entry.
+struct FdtReserveEntry {
+    address u64 "physical start address"
+    size    u64 "size in bytes (0 with address 0 terminates the map)"
+}
+
+// A 4-byte chunk of a padded node name; the last chunk ends in NUL padding.
+struct FdtNameChunk {
+    text     string[4] "up to four name characters"
+    lastByte at +3 u8  "final byte: 0 in the chunk that ends the name"
+}
+
+struct FdtBeginNode {
+    name   at +0 cstring "node name (empty for the root node)"
+    chunks repeat FdtNameChunk until lastByte == 0 "the name plus its padding, in 4-byte steps"
+}
+
+struct FdtProp {
+    len     u32        "property value length in bytes"
+    nameOff u32        "offset of the property name in the strings block"
+    value   bytes[len] "property value (cells, strings or bytes)"
+    padLen  = (4 - len % 4) % 4
+    pad     bytes[padLen] "alignment padding to 4 bytes"
+}
+
+struct FdtStructToken {
+    token FdtToken "structure block token"
+    body  match token {
+        1       => FdtBeginNode
+        3       => FdtProp
+        default => bytes[0]
+    }
+}
+
+// One NUL-terminated property name in the strings block.
+struct FdtString {
+    name cstring "property name"
+}
+
+struct Fdt {
+    magic           u32 "0xD00DFEED"
+    totalSize       u32 "total size of the blob in bytes"
+    offDtStruct     u32 "offset of the structure block"
+    offDtStrings    u32 "offset of the strings block"
+    offMemRsvmap    u32 "offset of the memory reservation map"
+    version         u32 "format version (17)"
+    lastCompVersion u32 "lowest compatible version (16)"
+    bootCpuidPhys   u32 "physical id of the boot CPU"
+    sizeDtStrings   u32 "size of the strings block"
+    sizeDtStruct    u32 "size of the structure block"
+    reserveMap at offMemRsvmap repeat FdtReserveEntry until size == 0 "reserved memory ranges, terminated by a zero entry"
+    structure  at offDtStruct  repeat FdtStructToken  until token == 9 "the device tree itself, as tokens"
+    strings    at offDtStrings bytes[sizeDtStrings] "strings block: NUL-terminated property names"
+    stringList at offDtStrings repeat FdtString "property names (the strings block is normally last in the file)"
+}
+"""

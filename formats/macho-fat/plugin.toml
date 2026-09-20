@@ -1,0 +1,151 @@
+id = "macho-fat"
+name = "Mach-O universal binary"
+version = "1.0.0"
+description = "Apple fat / universal binary: the architecture slice table, with each slice's Mach-O magic peeked."
+author = "Nybble"
+
+# The fat magic CA FE BA BE is shared with Java class files. A universal binary
+# has a tiny slice count in the next 4 bytes (2 or 3 in practice) where a class
+# file has minor/major version (major >= 45), so the two-slice and three-slice
+# layouts are detected with an 8-byte rule that outranks the 4-byte Java one.
+# Other slice counts still parse when the format is chosen manually.
+
+[[formats]]
+name = "Universal binary"
+extension = "dylib"
+description = "Mach-O fat binary with two architecture slices (e.g. x86_64 + arm64)"
+confidence = 98
+entry = "FatHeader"
+endian = "be"
+detect = [{ offset = 0, hex = "CA FE BA BE 00 00 00 02" }]
+schema = """
+// Mach-O fat (universal) binary — a big-endian table of architecture slices,
+// each pointing at a complete Mach-O image somewhere later in the file. Since
+// the slices themselves are usually little-endian (x86_64, arm64), only their
+// magic is peeked here; open a slice at its offset with the Mach-O pack.
+
+enum CpuType : i32 {
+    Vax       = 1
+    Mc680x0   = 6
+    X86       = 7
+    X86_64    = 0x01000007
+    Mc98000   = 10
+    Hppa      = 11
+    Arm       = 12
+    Arm64     = 0x0100000C
+    Arm64_32  = 0x0200000C
+    Mc88000   = 13
+    Sparc     = 14
+    I860      = 15
+    PowerPC   = 18
+    PowerPC64 = 0x01000012
+}
+
+struct FatArch {
+    cputype    CpuType "CPU family of this slice"
+    cpusubtype u32     "CPU subtype (bit 31 = lib64; arm64e = 2, x86_64h = 8)"
+    offset     u32     "file offset of the slice's Mach-O image"
+    size       u32     "slice size in bytes"
+    align      u32     "slice alignment as a power of two (14 = 16 KB)"
+    sliceMagic at offset bytes[4] "Mach-O magic at the slice: CF FA ED FE = 64-bit LE, CE FA ED FE = 32-bit LE"
+}
+
+struct FatHeader {
+    magic   u32              "0xCAFEBABE"
+    nfatArch u32             "number of architecture slices"
+    archs   FatArch[nfatArch] "one entry per slice"
+}
+"""
+
+[[formats]]
+name = "Universal binary (3 slices)"
+extension = "dylib"
+description = "Mach-O fat binary with three architecture slices"
+confidence = 98
+entry = "FatHeader"
+endian = "be"
+detect = [{ offset = 0, hex = "CA FE BA BE 00 00 00 03" }]
+schema = """
+// Mach-O fat (universal) binary — a big-endian table of architecture slices,
+// each pointing at a complete Mach-O image somewhere later in the file. Since
+// the slices themselves are usually little-endian (x86_64, arm64), only their
+// magic is peeked here; open a slice at its offset with the Mach-O pack.
+
+enum CpuType : i32 {
+    Vax       = 1
+    Mc680x0   = 6
+    X86       = 7
+    X86_64    = 0x01000007
+    Mc98000   = 10
+    Hppa      = 11
+    Arm       = 12
+    Arm64     = 0x0100000C
+    Arm64_32  = 0x0200000C
+    Mc88000   = 13
+    Sparc     = 14
+    I860      = 15
+    PowerPC   = 18
+    PowerPC64 = 0x01000012
+}
+
+struct FatArch {
+    cputype    CpuType "CPU family of this slice"
+    cpusubtype u32     "CPU subtype (bit 31 = lib64; arm64e = 2, x86_64h = 8)"
+    offset     u32     "file offset of the slice's Mach-O image"
+    size       u32     "slice size in bytes"
+    align      u32     "slice alignment as a power of two (14 = 16 KB)"
+    sliceMagic at offset bytes[4] "Mach-O magic at the slice: CF FA ED FE = 64-bit LE, CE FA ED FE = 32-bit LE"
+}
+
+struct FatHeader {
+    magic   u32              "0xCAFEBABE"
+    nfatArch u32             "number of architecture slices"
+    archs   FatArch[nfatArch] "one entry per slice"
+}
+"""
+
+[[formats]]
+name = "Universal binary (64-bit table)"
+extension = "dylib"
+description = "Mach-O fat binary with 64-bit slice offsets (FAT_MAGIC_64)"
+confidence = 100
+entry = "FatHeader64"
+endian = "be"
+detect = [{ offset = 0, hex = "CA FE BA BF" }]
+schema = """
+// FAT_MAGIC_64 variant: the same slice table with 64-bit offsets and sizes,
+// for universal binaries larger than 4 GB.
+
+enum CpuType : i32 {
+    Vax       = 1
+    Mc680x0   = 6
+    X86       = 7
+    X86_64    = 0x01000007
+    Mc98000   = 10
+    Hppa      = 11
+    Arm       = 12
+    Arm64     = 0x0100000C
+    Arm64_32  = 0x0200000C
+    Mc88000   = 13
+    Sparc     = 14
+    I860      = 15
+    PowerPC   = 18
+    PowerPC64 = 0x01000012
+}
+
+struct FatArch64 {
+    cputype    CpuType "CPU family of this slice"
+    cpusubtype u32     "CPU subtype (bit 31 = lib64; arm64e = 2, x86_64h = 8)"
+    offset     u64     "file offset of the slice's Mach-O image"
+    size       u64     "slice size in bytes"
+    align      u32     "slice alignment as a power of two (14 = 16 KB)"
+    reserved   u32
+    sliceMagic at offset bytes[4] "Mach-O magic at the slice: CF FA ED FE = 64-bit LE, CE FA ED FE = 32-bit LE"
+}
+
+struct FatHeader64 {
+    magic    u32                 "0xCAFEBABF"
+    nfatArch u32                 "number of architecture slices"
+    archs    FatArch64[nfatArch] "one entry per slice"
+}
+"""

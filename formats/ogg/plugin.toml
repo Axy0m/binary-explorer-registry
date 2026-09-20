@@ -1,0 +1,125 @@
+id = "ogg"
+name = "Ogg container"
+version = "1.0.0"
+description = "Ogg first page: page header, segment table and the codec identification header (Vorbis, Opus, FLAC, Theora, Speex)."
+author = "Nybble"
+
+[[formats]]
+name = "OGG"
+extension = "ogg"
+description = "Ogg bitstream page (Vorbis / Opus / FLAC / Theora / Speex)"
+confidence = 95
+entry = "OggPage"
+endian = "le"
+detect = [{ offset = 0, hex = "4F 67 67 53" }]
+schema = """
+// Ogg — Xiph.org's page-based container for Vorbis, Opus, FLAC, Theora and
+// Speex. Every page starts with a 27-byte header followed by a segment table;
+// the payload length is the sum of the segment table entries, which a
+// declarative schema cannot add up, so this pack decodes the first page.
+//
+// That first page is the interesting one: it is the "beginning of stream" page
+// and carries exactly one packet — the codec's identification header — which
+// is decoded here by its first byte (the packet type).
+
+bitfield OggHeaderType : u8 {
+    continued 0 // first packet continues from the previous page
+    bos       1 // beginning of stream: first page of a logical bitstream
+    eos       2 // end of stream: last page of a logical bitstream
+}
+
+// Vorbis identification header (packet type 1, then "vorbis").
+bitfield VorbisBlocksizes : u8 {
+    blocksize0 0..3 // log2 of the short block size
+    blocksize1 4..7 // log2 of the long block size
+}
+
+struct VorbisIdentification {
+    packetType     u8               "1 = identification header"
+    codec          string[6]        "always vorbis"
+    version        u32              "Vorbis version (0)"
+    channels       u8               "audio channels"
+    sampleRate     u32              "sample rate (Hz)"
+    bitrateMaximum i32              "maximum bitrate hint (0 = unset)"
+    bitrateNominal i32              "nominal bitrate (0 = unset)"
+    bitrateMinimum i32              "minimum bitrate hint (0 = unset)"
+    blocksizes     VorbisBlocksizes "log2 short/long block sizes"
+    framing        u8               "framing bit (must be 1)"
+}
+
+// Opus identification header ("OpusHead", RFC 7845).
+struct OpusHead {
+    magic            string[8] "always OpusHead"
+    version          u8        "encapsulation version (1)"
+    channels         u8        "output channel count"
+    preSkip          u16       "samples to discard at 48 kHz"
+    inputSampleRate  u32       "original input sample rate (Hz), informational"
+    outputGain       i16       "output gain in Q7.8 dB"
+    mappingFamily    u8        "channel mapping family (0 = mono/stereo)"
+}
+
+// Ogg FLAC identification (0x7F, "FLAC"). The version and packet count are
+// followed by the native "fLaC" stream marker and a big-endian STREAMINFO.
+struct OggFlacIdentification {
+    packetType    u8        "0x7F"
+    signature     string[4] "always FLAC"
+    majorVersion  u8        "Ogg FLAC mapping major version (1)"
+    minorVersion  u8        "Ogg FLAC mapping minor version (0)"
+    headerPackets bytes[2]  "big-endian count of header packets that follow (0 = unknown)"
+    nativeMarker  string[4] "fLaC: a native FLAC stream begins here"
+}
+
+// Theora identification header (0x80, "theora"). The remaining fields are
+// big-endian and bit-packed, so only the version is decoded here.
+struct TheoraIdentification {
+    packetType   u8        "0x80 = identification header"
+    codec        string[6] "always theora"
+    versionMajor u8        "bitstream version major (3)"
+    versionMinor u8        "bitstream version minor (2)"
+    versionRev   u8        "bitstream version revision"
+}
+
+// Speex header ("Speex   ").
+struct SpeexHeader {
+    magic                string[8]  "always Speex   "
+    version              string[20] "encoder version string"
+    versionId            i32        "Speex version id (1)"
+    headerSize           i32        "size of this header (80)"
+    rate                 i32        "sample rate (Hz)"
+    mode                 i32        "0 = narrowband, 1 = wideband, 2 = ultra-wideband"
+    modeBitstreamVersion i32        "mode bitstream version"
+    channels             i32        "channel count"
+    bitrate              i32        "bitrate (-1 = unknown)"
+    frameSize            i32        "samples per frame"
+    vbr                  i32        "1 = variable bitrate"
+    framesPerPacket      i32        "frames per Ogg packet"
+    extraHeaders         i32        "additional header packets"
+    reserved1            i32
+    reserved2            i32
+}
+
+struct OggPage {
+    capturePattern  string[4]          "always OggS"
+    version         u8                 "stream structure version (0)"
+    headerType      OggHeaderType      "page flags"
+    granulePosition i64                "codec-defined position (samples/frames) at page end"
+    serialNumber    u32                "logical bitstream serial number"
+    pageSequence    u32                "page sequence number (0 for the first page)"
+    checksum        u32                "CRC-32 of the page with this field zeroed"
+    pageSegments    u8                 "number of segment table entries"
+    segmentTable    u8[pageSegments]   "lacing values: payload bytes per segment (255 = continues)"
+    payloadOffset   = 27 + pageSegments
+    // The first byte of the payload says which codec's identification header
+    // this is. Placed by pointer at the payload start, so it reads no bytes of
+    // the header walk itself.
+    packetType      at +payloadOffset u8 "first payload byte: 1 Vorbis, 0x4F Opus, 0x7F FLAC, 0x80 Theora, 0x53 Speex"
+    identification  at +payloadOffset match packetType {
+        1    => VorbisIdentification
+        0x4F => OpusHead
+        0x7F => OggFlacIdentification
+        0x80 => TheoraIdentification
+        0x53 => SpeexHeader
+        default => bytes[0]
+    }
+}
+"""

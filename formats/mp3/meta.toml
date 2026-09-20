@@ -1,0 +1,5 @@
+category = "audio"
+tags = ["audio", "mp3", "id3", "metadata", "mpeg"]
+maintainer = "Nybble"
+homepage = "https://id3.org/id3v2.3.0"
+sample = ""
