@@ -1,0 +1,126 @@
+id = "fat"
+name = "FAT boot sector"
+version = "1.0.0"
+description = "FAT12/16 and FAT32 boot sectors: the BIOS parameter block and the extended block that names the volume."
+author = "Nybble"
+
+[[formats]]
+name = "FAT16"
+extension = "img"
+description = "FAT12 / FAT16 boot sector (BPB + extended boot record)"
+confidence = 90
+entry = "Fat16"
+endian = "le"
+# The file system type string at offset 54: "FAT1", covering FAT12 and FAT16.
+# It is advisory - Microsoft says not to trust it - but nothing else in the
+# sector is distinctive enough to detect on.
+detect = [{ offset = 54, hex = "46 41 54 31" }, { offset = 510, hex = "55 AA" }]
+schema = """
+// FAT12/16 boot sector - the first sector of the volume, holding both the boot
+// code and the BIOS parameter block that describes the geometry. The BPB is
+// what a driver reads: sector size, cluster size, how many copies of the
+// allocation table there are, and where the root directory sits.
+//
+// FAT12 and FAT16 differ only in the width of an entry in the table, and the
+// sector cannot tell you which it is. The rule is by cluster count: fewer than
+// 4085 clusters is FAT12, fewer than 65525 is FAT16, anything more is FAT32.
+//
+// The layout has an odd shape because it grew: the BPB starts three bytes in,
+// after a jump instruction, and several fields are duplicated in 16- and
+// 32-bit form because the original ones overflowed on larger disks.
+
+enum FatMediaDescriptor : u8 {
+    Floppy144M   = 0xF0
+    FixedDisk    = 0xF8
+    Floppy720K   = 0xF9
+    Floppy320K   = 0xFA
+    Floppy640K   = 0xFB
+    Floppy180K   = 0xFC
+    Floppy360K   = 0xFD
+    Floppy160K   = 0xFE
+    Floppy320KAlt = 0xFF
+}
+
+struct Fat16 {
+    jump             bytes[3] "a short jump over the BPB to the boot code"
+    oemName          char[8]  "formatting system; MSDOS5.0 or mkfs.fat on Linux"
+    bytesPerSector   u16      "512 on essentially everything"
+    sectorsPerCluster u8      "cluster size, a power of two"
+    reservedSectors  u16      "sectors before the first allocation table, this one included"
+    numberOfFats     u8       "copies of the allocation table, normally 2"
+    rootEntries      u16      "entries in the fixed-size root directory"
+    totalSectors16   u16      "sectors on the volume, 0 when it needs 32 bits"
+    mediaDescriptor  FatMediaDescriptor "media type, echoed in the first FAT entry"
+    sectorsPerFat    u16      "sectors in one allocation table"
+    sectorsPerTrack  u16      "disk geometry, for the BIOS"
+    numberOfHeads    u16      "disk geometry, for the BIOS"
+    hiddenSectors    u32      "sectors before this partition on the disk"
+    totalSectors32   u32      "sectors on the volume, when it does not fit in 16 bits"
+    driveNumber      u8       "BIOS drive: 0x00 floppy, 0x80 hard disk"
+    reserved         u8       "reused by Windows NT as a dirty flag"
+    bootSignature    u8       "0x29 when the three fields below are present"
+    volumeSerial     u32      "serial number, generated at format time"
+    volumeLabel      char[11] "volume label, space padded; also stored in the root directory"
+    fileSystemType   char[8]  "FAT12 or FAT16, space padded; advisory only"
+    bootCode         bytes[448] "the boot code the jump above lands in"
+    endMarker        u16      "0xAA55, the sector signature"
+}
+"""
+
+[[formats]]
+name = "FAT32"
+extension = "img"
+description = "FAT32 boot sector (BPB + FAT32 extended boot record)"
+confidence = 90
+entry = "Fat32"
+endian = "le"
+# The file system type string at offset 82: "FAT32".
+detect = [{ offset = 82, hex = "46 41 54 33 32" }, { offset = 510, hex = "55 AA" }]
+schema = """
+// FAT32 boot sector - the same BPB as FAT16 for the first 36 bytes, then a
+// different tail. The changes are all about size: the table length becomes
+// 32-bit, and the root directory stops being a fixed area at a fixed place and
+// becomes an ordinary cluster chain, so the sector has to say which cluster it
+// starts at. rootEntries and sectorsPerFat16 are left as zero to make an old
+// driver refuse the volume rather than misread it.
+//
+// FAT32 also adds two backup structures: a copy of this sector, usually at
+// sector 6, and an FS information sector holding a cached free-cluster count.
+
+enum FatMediaDescriptor : u8 {
+    Floppy144M = 0xF0
+    FixedDisk  = 0xF8
+}
+
+struct Fat32 {
+    jump              bytes[3] "a short jump over the BPB to the boot code"
+    oemName           char[8]  "formatting system"
+    bytesPerSector    u16      "512 on essentially everything"
+    sectorsPerCluster u8       "cluster size, a power of two"
+    reservedSectors   u16      "sectors before the first allocation table, usually 32"
+    numberOfFats      u8       "copies of the allocation table, normally 2"
+    rootEntries       u16      "always 0 on FAT32: the root is a cluster chain"
+    totalSectors16    u16      "always 0 on FAT32"
+    mediaDescriptor   FatMediaDescriptor "media type, echoed in the first FAT entry"
+    sectorsPerFat16   u16      "always 0 on FAT32; see sectorsPerFat32"
+    sectorsPerTrack   u16      "disk geometry, for the BIOS"
+    numberOfHeads     u16      "disk geometry, for the BIOS"
+    hiddenSectors     u32      "sectors before this partition on the disk"
+    totalSectors32    u32      "sectors on the volume"
+    sectorsPerFat32   u32      "sectors in one allocation table"
+    extFlags          u16      "bits 0-3 the active FAT, bit 7 set means only it is live"
+    fsVersion         u16      "0"
+    rootCluster       u32      "first cluster of the root directory, normally 2"
+    fsInfoSector      u16      "sector holding the FS information structure, normally 1"
+    backupBootSector  u16      "sector holding the backup boot sector, normally 6"
+    reserved          bytes[12] "zero"
+    driveNumber       u8       "BIOS drive: 0x80 for a hard disk"
+    reserved2         u8       "reused by Windows NT as a dirty flag"
+    bootSignature     u8       "0x29 when the three fields below are present"
+    volumeSerial      u32      "serial number, generated at format time"
+    volumeLabel       char[11] "volume label, space padded"
+    fileSystemType    char[8]  "FAT32 followed by three spaces; advisory only"
+    bootCode          bytes[420] "the boot code the jump above lands in"
+    endMarker         u16      "0xAA55, the sector signature"
+}
+"""

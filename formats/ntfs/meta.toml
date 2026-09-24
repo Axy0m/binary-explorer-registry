@@ -1,0 +1,5 @@
+category = "filesystem"
+tags = ["filesystem", "ntfs", "windows", "boot-sector", "forensics"]
+maintainer = "Nybble"
+homepage = "https://learn.microsoft.com/windows/win32/fileio/ntfs-technical-reference"
+sample = ""

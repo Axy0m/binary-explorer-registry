@@ -1,0 +1,221 @@
+id = "pe"
+name = "PE executable"
+version = "1.0.0"
+description = "Windows PE: the DOS stub, the COFF and optional headers (PE32 and PE32+), data directories and the section table."
+author = "Nybble"
+
+[[formats]]
+name = "PE"
+extension = "exe"
+description = "Windows portable executable (exe, dll, sys, ocx)"
+confidence = 70
+entry = "Pe"
+endian = "le"
+# "MZ". That alone is only a DOS executable, so the confidence is modest; the
+# real PE signature sits wherever e_lfanew points, which detection cannot follow.
+detect = [{ offset = 0, hex = "4D 5A" }]
+schema = """
+// PE - the Windows executable. It still opens with a DOS MZ header, kept so a
+// 1990 DOS box could print "This program cannot be run in DOS mode". The only
+// field of it that matters today is e_lfanew, the offset of the real PE header,
+// which is followed here by pointer.
+//
+// After the PE signature come the COFF header (machine, section count, the
+// characteristics that say exe or dll) and the optional header, which is not
+// optional for an image: it holds the entry point, the image base, the
+// subsystem, and the data directories the loader uses to find the imports,
+// exports, relocations and certificates. PE32 and PE32+ differ only in a
+// handful of fields that widen to 64 bits, guarded below by the magic.
+
+enum PeMachine : u16 {
+    Unknown   = 0x0000
+    I386      = 0x014C
+    R4000Mips = 0x0166
+    Sh3       = 0x01A2
+    Sh4       = 0x01A6
+    Arm       = 0x01C0
+    Thumb     = 0x01C2
+    ArmNt     = 0x01C4
+    PowerPc   = 0x01F0
+    Ia64      = 0x0200
+    MipsFpu   = 0x0366
+    Ebc       = 0x0EBC
+    Amd64     = 0x8664
+    Arm64     = 0xAA64
+    RiscV32   = 0x5032
+    RiscV64   = 0x5064
+    RiscV128  = 0x5128
+}
+
+bitfield PeCharacteristics : u16 {
+    relocsStripped       0
+    executableImage      1
+    lineNumsStripped     2
+    localSymsStripped    3
+    aggressiveWsTrim     4
+    largeAddressAware    5  // can use more than 2 GB of address space
+    bytesReversedLo      7
+    machine32Bit         8
+    debugStripped        9
+    removableRunFromSwap 10
+    netRunFromSwap       11
+    system               12
+    dll                  13 // a DLL rather than an executable
+    upSystemOnly         14
+    bytesReversedHi      15
+}
+
+enum PeSubsystem : u16 {
+    Unknown                = 0
+    Native                 = 1
+    WindowsGui             = 2
+    WindowsCui             = 3
+    Os2Cui                 = 5
+    PosixCui               = 7
+    NativeWindows          = 8
+    WindowsCeGui           = 9
+    EfiApplication         = 10
+    EfiBootServiceDriver   = 11
+    EfiRuntimeDriver       = 12
+    EfiRom                 = 13
+    Xbox                   = 14
+    WindowsBootApplication = 16
+}
+
+bitfield PeDllCharacteristics : u16 {
+    highEntropyVa       5  // 64-bit ASLR with a full-width address space
+    dynamicBase         6  // ASLR: the image can be relocated at load
+    forceIntegrity      7
+    nxCompat            8  // DEP: data pages are not executable
+    noIsolation         9
+    noSeh               10
+    noBind              11
+    appContainer        12
+    wdmDriver           13
+    guardCf             14 // Control Flow Guard
+    terminalServerAware 15
+}
+
+bitfield PeSectionFlags : u32 {
+    code               5
+    initializedData    6
+    uninitializedData  7  // .bss: occupies memory but no file bytes
+    linkInfo           9
+    linkRemove         11
+    linkComdat         12
+    gprel              15
+    alignMask          20..23 // alignment is 2^(n-1) bytes
+    linkNrelocOvfl     24
+    memDiscardable     25
+    memNotCached       26
+    memNotPaged        27
+    memShared          28
+    memExecute         29
+    memRead            30
+    memWrite           31
+}
+
+// The DOS header. Everything but lfanew is vestigial.
+struct PeDosHeader {
+    magic     char[2]  "MZ, for Mark Zbikowski"
+    cblp      u16      "bytes on the last page of the DOS image"
+    cp        u16      "pages in the DOS image"
+    crlc      u16      "relocation entries"
+    cparhdr   u16      "header size in 16-byte paragraphs"
+    minalloc  u16      "minimum extra paragraphs needed"
+    maxalloc  u16      "maximum extra paragraphs needed"
+    ss        u16      "initial SS, relative to the load segment"
+    sp        u16      "initial SP"
+    csum      u16      "checksum, normally left zero"
+    ip        u16      "initial IP"
+    cs        u16      "initial CS, relative to the load segment"
+    lfarlc    u16      "file offset of the relocation table"
+    ovno      u16      "overlay number"
+    reserved  bytes[8] "reserved words"
+    oemid     u16      "OEM identifier"
+    oeminfo   u16      "OEM information"
+    reserved2 bytes[20] "reserved words"
+    lfanew    u32      "file offset of the PE signature: the only field that still matters"
+}
+
+// One data directory entry: an RVA and a size, or two zeros when absent.
+struct PeDataDirectory {
+    virtualAddress u32 "RVA of the table, 0 when the entry is unused"
+    size           u32 "size of the table in bytes"
+}
+
+struct PeOptionalHeader {
+    magic                   u16 "0x10B = PE32, 0x20B = PE32+, 0x107 = ROM image"
+    majorLinkerVersion      u8
+    minorLinkerVersion      u8
+    sizeOfCode              u32 "total size of the code sections"
+    sizeOfInitializedData   u32 "total size of the initialized data sections"
+    sizeOfUninitializedData u32 "total size of the .bss sections"
+    addressOfEntryPoint     u32 "RVA of the entry point; 0 for a DLL with no entry"
+    baseOfCode              u32 "RVA of the start of the code"
+    baseOfData              u32 if magic == 0x10B "RVA of the start of the data; PE32 only"
+    imageBase32             u32 if magic == 0x10B "preferred load address"
+    imageBase64             u64 if magic == 0x20B "preferred load address"
+    sectionAlignment        u32 "section alignment in memory"
+    fileAlignment           u32 "section alignment in the file, usually 512"
+    majorOsVersion          u16
+    minorOsVersion          u16
+    majorImageVersion       u16
+    minorImageVersion       u16
+    majorSubsystemVersion   u16
+    minorSubsystemVersion   u16
+    win32VersionValue       u32 "reserved, zero"
+    sizeOfImage             u32 "size of the loaded image, rounded to sectionAlignment"
+    sizeOfHeaders           u32 "headers plus the section table, rounded to fileAlignment"
+    checkSum                u32 "image checksum; required for drivers and system DLLs"
+    subsystem               PeSubsystem          "what runs this image"
+    dllCharacteristics      PeDllCharacteristics "ASLR, DEP, CFG and friends"
+    sizeOfStackReserve32    u32 if magic == 0x10B "virtual address space reserved for the stack"
+    sizeOfStackCommit32     u32 if magic == 0x10B "stack committed up front"
+    sizeOfHeapReserve32     u32 if magic == 0x10B "address space reserved for the default heap"
+    sizeOfHeapCommit32      u32 if magic == 0x10B "heap committed up front"
+    sizeOfStackReserve64    u64 if magic == 0x20B "virtual address space reserved for the stack"
+    sizeOfStackCommit64     u64 if magic == 0x20B "stack committed up front"
+    sizeOfHeapReserve64     u64 if magic == 0x20B "address space reserved for the default heap"
+    sizeOfHeapCommit64      u64 if magic == 0x20B "heap committed up front"
+    loaderFlags             u32 "reserved, zero"
+    numberOfRvaAndSizes     u32 "data directory entries that follow, normally 16"
+    // In order: export, import, resource, exception, certificate, base
+    // relocation, debug, architecture, global pointer, TLS, load config,
+    // bound import, IAT, delay import, CLR runtime header, reserved.
+    dataDirectories PeDataDirectory[numberOfRvaAndSizes] "where the loader finds each table"
+}
+
+struct PeSection {
+    name                 char[8]        "section name, NUL-padded, not NUL-terminated"
+    virtualSize          u32            "size of the section once loaded"
+    virtualAddress       u32            "RVA of the section in the loaded image"
+    sizeOfRawData        u32            "bytes in the file, rounded to fileAlignment"
+    pointerToRawData     u32            "file offset of the section contents"
+    pointerToRelocations u32            "file offset of the relocations, object files only"
+    pointerToLinenumbers u32            "deprecated, zero"
+    numberOfRelocations  u16            "object files only"
+    numberOfLinenumbers  u16            "deprecated, zero"
+    characteristics      PeSectionFlags "contents and the page protection to map it with"
+}
+
+struct PeHeader {
+    signature            bytes[4]           "50 45 00 00, the PE signature"
+    machine              PeMachine          "target architecture"
+    numberOfSections     u16                "entries in the section table"
+    timeDateStamp        u32                "link time (unix); often a reproducible-build hash"
+    pointerToSymbolTable u32                "COFF symbol table offset, 0 in an image"
+    numberOfSymbols      u32                "COFF symbols, 0 in an image"
+    sizeOfOptionalHeader u16                "bytes of optional header that follow"
+    characteristics      PeCharacteristics  "exe or dll, and how it may be loaded"
+    optional             PeOptionalHeader   "entry point, image base, subsystem, directories"
+    sections             PeSection[numberOfSections] "the section table"
+}
+
+struct Pe {
+    dos  PeDosHeader "the DOS stub header"
+    // The PE header, reached through e_lfanew. Placed by pointer, so the DOS
+    // stub code between the two is left where it is.
+    pe at dos.lfanew PeHeader "the PE header the Windows loader actually reads"
+}
+"""

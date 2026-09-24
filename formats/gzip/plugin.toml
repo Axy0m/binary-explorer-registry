@@ -1,0 +1,66 @@
+id = "gzip"
+name = "gzip compressed"
+version = "1.0.0"
+description = "gzip member header, including the optional extra field, original file name and comment."
+author = "Nybble"
+
+[[formats]]
+name = "GZIP"
+extension = "gz"
+description = "gzip compressed data (RFC 1952)"
+confidence = 90
+entry = "Gzip"
+endian = "le"
+detect = [{ offset = 0, hex = "1F 8B 08" }]
+schema = """
+// gzip - a ten-byte fixed header, a handful of optional fields the flags
+// switch on, then the raw deflate stream. A file is really a sequence of
+// members, each with its own header; concatenating two .gz files is a valid
+// .gz file, which is how tools like pigz write in parallel.
+//
+// The CRC-32 and the uncompressed size live in an eight-byte trailer at the
+// very end of each member. They are not shown here: reaching them means
+// decompressing the deflate stream, which a declarative schema cannot do.
+// The `deflate` field below therefore runs to the end of the data.
+
+bitfield GzipFlags : u8 {
+    text     0 // the compressed data is probably ASCII text
+    hcrc     1 // a CRC-16 of the header follows the optional fields
+    extra    2 // an extra field is present
+    name     3 // the original file name is present
+    comment  4 // a comment is present
+}
+
+enum GzipOs : u8 {
+    Fat         = 0
+    Amiga       = 1
+    Vms         = 2
+    Unix        = 3
+    VmCms       = 4
+    AtariTos    = 5
+    Hpfs        = 6
+    Macintosh   = 7
+    ZSystem     = 8
+    CpM         = 9
+    Tops20      = 10
+    Ntfs        = 11
+    Qdos        = 12
+    AcornRiscOs = 13
+    Unknown     = 255
+}
+
+struct Gzip {
+    magic      bytes[2]   "1F 8B"
+    method     u8         "compression method; 8 = deflate, the only one defined"
+    flags      GzipFlags  "which optional fields follow the fixed header"
+    mtime      u32        "modification time of the original file (unix), 0 if unset"
+    extraFlags u8         "2 = compressed with the best algorithm, 4 = with the fastest"
+    os         GzipOs     "filesystem the file came from"
+    extraLen   u16              if flags.extra   "length of the extra field"
+    extra      bytes[extraLen]  if flags.extra   "extra field: subfield id, length, data"
+    name       cstring          if flags.name    "original file name, NUL-terminated"
+    comment    cstring          if flags.comment "comment, NUL-terminated"
+    headerCrc  u16              if flags.hcrc    "low 16 bits of the CRC-32 of the header"
+    deflate    bytes[*]   "the deflate stream, then an 8-byte CRC-32 and size trailer"
+}
+"""

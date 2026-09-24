@@ -1,0 +1,5 @@
+category = "system"
+tags = ["system", "windows", "event-log", "forensics", "dfir"]
+maintainer = "Nybble"
+homepage = "https://learn.microsoft.com/openspecs/windows_protocols/ms-even6/"
+sample = ""

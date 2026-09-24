@@ -1,0 +1,92 @@
+id = "flv"
+name = "FLV video"
+version = "1.0.0"
+description = "Flash Video: header and the full tag stream, with audio, video and script tag headers decoded."
+author = "Nybble"
+
+[[formats]]
+name = "FLV"
+extension = "flv"
+description = "Flash Video / F4V container"
+confidence = 95
+entry = "Flv"
+endian = "be"
+# "FLV" 01
+detect = [{ offset = 0, hex = "46 4C 56 01" }]
+schema = """
+// FLV - a nine-byte header and then a flat chain of tags, each carrying one
+// audio frame, one video frame, or a chunk of AMF script data. Big-endian
+// throughout, and every size and timestamp is 24 bits, so they are read as
+// three bytes and recombined (the DSL has no u24 primitive).
+//
+// Each tag is preceded by the size of the tag before it. That backward link is
+// what lets a player seek backwards through a stream, and it is why the first
+// tag is preceded by a zero.
+//
+// The first byte of an audio or video tag packs the codec and its parameters
+// into nibbles, decoded below as bitfields.
+
+bitfield FlvHeaderFlags : u8 {
+    video 0
+    audio 2
+}
+
+enum FlvTagType : u8 {
+    Audio      = 8
+    Video      = 9
+    ScriptData = 18
+}
+
+bitfield FlvAudioHeader : u8 {
+    soundFormat 4..7 // 0 linear PCM, 2 MP3, 10 AAC, 11 Speex
+    soundRate   2..3 // 0 5.5 kHz, 1 11 kHz, 2 22 kHz, 3 44 kHz
+    soundSize   1    // 0 = 8-bit samples, 1 = 16-bit
+    soundType   0    // 0 = mono, 1 = stereo
+}
+
+bitfield FlvVideoHeader : u8 {
+    frameType 4..7 // 1 keyframe, 2 inter frame, 5 video info/command
+    codecId   0..3 // 2 Sorenson H.263, 4 VP6, 7 AVC (H.264)
+}
+
+struct FlvAudioTag {
+    header FlvAudioHeader "codec, sample rate, sample size and channel count"
+}
+
+struct FlvVideoTag {
+    header FlvVideoHeader "frame type and codec"
+}
+
+struct FlvTag {
+    previousTagSize u32        "size of the tag before this one; 0 for the first"
+    tagType         FlvTagType "audio, video, or AMF script data"
+    sizeHi          u8         "data size byte (high)"
+    sizeMid         u8         "data size byte (mid)"
+    sizeLo          u8         "data size byte (low)"
+    dataSize        = sizeHi * 65536 + sizeMid * 256 + sizeLo
+    timeHi          u8         "timestamp byte (high)"
+    timeMid         u8         "timestamp byte (mid)"
+    timeLo          u8         "timestamp byte (low)"
+    timestamp       = timeHi * 65536 + timeMid * 256 + timeLo
+    timestampExt    u8         "the timestamp upper byte: the real value is 32-bit"
+    streamIdHi      u8         "stream id byte (high), always 0"
+    streamIdMid     u8         "stream id byte (mid), always 0"
+    streamIdLo      u8         "stream id byte (low), always 0"
+    data            bytes[dataSize] "the tag payload"
+    // Typed view of the first payload byte. Placed by pointer, so it reads no
+    // bytes of its own and the tag walk above stays exact.
+    decoded at +15 match tagType {
+        8  => FlvAudioTag
+        9  => FlvVideoTag
+        default => bytes[0]
+    }
+}
+
+struct Flv {
+    signature  char[3]        "FLV"
+    version    u8             "1"
+    flags      FlvHeaderFlags "which streams the file contains"
+    dataOffset u32            "header size in bytes; 9 in every version so far"
+    tags       repeat FlvTag  "every tag, in timestamp order"
+}
+"""

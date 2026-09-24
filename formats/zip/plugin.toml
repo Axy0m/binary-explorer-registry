@@ -1,0 +1,152 @@
+id = "zip"
+name = "ZIP archive"
+version = "1.0.0"
+description = "ZIP archive: walks every record — local files, the central directory, and the end-of-central-directory records, Zip64 included."
+author = "Nybble"
+
+[[formats]]
+name = "ZIP"
+extension = "zip"
+description = "PKZIP / .zip archive (also jar, apk, docx, epub, odt)"
+confidence = 90
+entry = "Zip"
+endian = "le"
+detect = [{ offset = 0, hex = "50 4B 03 04" }]
+schema = """
+// ZIP — a flat stream of records, each introduced by a 4-byte "PK" signature.
+// Local file headers (with their compressed data) come first, then the central
+// directory, then the end-of-central-directory record that a reader seeks to
+// first. Walking forward from offset 0 works because every local header carries
+// its own compressed size.
+//
+// One caveat: when the dataDescriptor flag is set, a streaming writer left the
+// sizes and CRC zero in the local header and wrote them in a descriptor record
+// *after* the data. The walk cannot recover from that without scanning, so an
+// archive written that way stops at the first such entry.
+//
+// This is also the container behind jar, apk, docx, xlsx, epub and odt.
+
+enum ZipMethod : u16 {
+    Stored    = 0
+    Shrunk    = 1
+    Imploded  = 6
+    Deflate   = 8
+    Deflate64 = 9
+    Bzip2     = 12
+    Lzma      = 14
+    Zstd      = 93
+    Xz        = 95
+    Jpeg      = 96
+    WavPack   = 97
+    Ppmd      = 98
+    AesCrypt  = 99
+}
+
+bitfield ZipFlags : u16 {
+    encrypted        0  // entry is traditional PKWARE-encrypted
+    compressOption1  1  // meaning depends on the method (deflate level)
+    compressOption2  2
+    dataDescriptor   3  // sizes/CRC are zero here and follow the data
+    enhancedDeflate  4
+    patchedData      5
+    strongEncryption 6
+    utf8Names        11 // the name and comment are UTF-8, not CP437
+    maskedLocalInfo  13 // local header fields hidden (strong encryption)
+}
+
+// A local file header, immediately followed by that file's compressed bytes.
+struct ZipLocalFile {
+    versionNeeded    u16       "minimum version needed to extract, times 10"
+    flags            ZipFlags  "general purpose bit flags"
+    method           ZipMethod "compression method"
+    modTime          u16       "last modification time (MS-DOS packed)"
+    modDate          u16       "last modification date (MS-DOS packed)"
+    crc32            u32       "CRC-32 of the uncompressed data"
+    compressedSize   u32       "bytes stored (0xFFFFFFFF means see the Zip64 extra)"
+    uncompressedSize u32       "bytes after decompression"
+    nameLen          u16       "length of the file name"
+    extraLen         u16       "length of the extra field"
+    name             string[nameLen] "file name, '/' separated, no leading slash"
+    extra            bytes[extraLen] "extra field: Zip64 sizes, timestamps, unix ids"
+    data             bytes[compressedSize] "the compressed file data"
+}
+
+// A central directory entry — one per file, repeating the local header and
+// adding the attributes and the offset a reader jumps to.
+struct ZipCentralFile {
+    versionMadeBy     u16       "creator version; the high byte is the host OS"
+    versionNeeded     u16       "minimum version needed to extract, times 10"
+    flags             ZipFlags  "general purpose bit flags"
+    method            ZipMethod "compression method"
+    modTime           u16       "last modification time (MS-DOS packed)"
+    modDate           u16       "last modification date (MS-DOS packed)"
+    crc32             u32       "CRC-32 of the uncompressed data"
+    compressedSize    u32       "bytes stored"
+    uncompressedSize  u32       "bytes after decompression"
+    nameLen           u16       "length of the file name"
+    extraLen          u16       "length of the extra field"
+    commentLen        u16       "length of the file comment"
+    diskStart         u16       "disk this file starts on (0 unless split)"
+    internalAttrs     u16       "bit 0 marks the entry as text"
+    externalAttrs     u32       "host attributes; unix mode in the high 16 bits"
+    localHeaderOffset u32       "offset of this file's local header"
+    name              string[nameLen]    "file name"
+    extra             bytes[extraLen]    "extra field"
+    comment           string[commentLen] "per-file comment"
+}
+
+// End of central directory — the record readers find by scanning backwards.
+struct ZipEndOfCentralDir {
+    diskNumber      u16 "number of this disk"
+    centralDirDisk  u16 "disk holding the start of the central directory"
+    entriesThisDisk u16 "central directory entries on this disk"
+    entriesTotal    u16 "central directory entries in total"
+    centralDirSize  u32 "size of the central directory in bytes"
+    centralDirOffset u32 "offset of the first central directory entry"
+    commentLen      u16 "length of the archive comment"
+    comment         string[commentLen] "archive comment"
+}
+
+// Zip64 end of central directory, used once a count or offset overflows 32 bits.
+struct Zip64EndOfCentralDir {
+    recordSize       u64 "size of this record, these 12 bytes not counted"
+    versionMadeBy    u16 "creator version"
+    versionNeeded    u16 "minimum version needed to extract"
+    diskNumber       u32 "number of this disk"
+    centralDirDisk   u32 "disk holding the start of the central directory"
+    entriesThisDisk  u64 "central directory entries on this disk"
+    entriesTotal     u64 "central directory entries in total"
+    centralDirSize   u64 "size of the central directory in bytes"
+    centralDirOffset u64 "offset of the first central directory entry"
+}
+
+struct Zip64Locator {
+    endRecordDisk   u32 "disk holding the Zip64 end-of-central-directory record"
+    endRecordOffset u64 "offset of that record"
+    totalDisks      u32 "total number of disks"
+}
+
+// Written after the data when the dataDescriptor flag is set.
+struct ZipDataDescriptor {
+    crc32            u32 "CRC-32 of the uncompressed data"
+    compressedSize   u32 "bytes stored"
+    uncompressedSize u32 "bytes after decompression"
+}
+
+struct ZipRecord {
+    signature u32 "0x04034B50 local file, 0x02014B50 central, 0x06054B50 end"
+    body match signature {
+        0x04034B50 => ZipLocalFile
+        0x02014B50 => ZipCentralFile
+        0x06054B50 => ZipEndOfCentralDir
+        0x06064B50 => Zip64EndOfCentralDir
+        0x07064B50 => Zip64Locator
+        0x08074B50 => ZipDataDescriptor
+        default    => bytes[0]
+    }
+}
+
+struct Zip {
+    records repeat ZipRecord until signature == 0x06054B50 "every record, ending at the end-of-central-directory"
+}
+"""

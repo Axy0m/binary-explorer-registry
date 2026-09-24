@@ -1,0 +1,5 @@
+category = "game"
+tags = ["game", "rom", "nintendo", "nes", "emulation", "cartridge"]
+maintainer = "Nybble"
+homepage = "https://www.nesdev.org/wiki/INES"
+sample = ""

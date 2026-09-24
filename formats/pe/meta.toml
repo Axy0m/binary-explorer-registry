@@ -1,0 +1,5 @@
+category = "executable"
+tags = ["executable", "windows", "pe", "dll", "binary", "malware"]
+maintainer = "Nybble"
+homepage = "https://learn.microsoft.com/windows/win32/debug/pe-format"
+sample = ""

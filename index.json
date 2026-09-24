@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "count": 40,
+  "count": 56,
   "formats": [
     {
       "id": "7z",
@@ -138,6 +138,31 @@
       "path": "formats/bzip2/plugin.toml"
     },
     {
+      "id": "cab",
+      "name": "Microsoft Cabinet",
+      "version": "1.0.0",
+      "description": "Microsoft Cabinet (.cab): header with its optional reserve and chained-cabinet fields, the folder table, and the file table followed to its offset.",
+      "author": "Nybble",
+      "category": "archive",
+      "tags": [
+        "archive",
+        "compression",
+        "windows",
+        "cabinet",
+        "installer",
+        "lzx"
+      ],
+      "formats": [
+        {
+          "name": "CAB",
+          "extension": "cab",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/cab/plugin.toml"
+    },
+    {
       "id": "dex",
       "name": "Dalvik DEX",
       "version": "1.0.0",
@@ -186,6 +211,55 @@
       "path": "formats/dtb/plugin.toml"
     },
     {
+      "id": "elf",
+      "name": "ELF executable",
+      "version": "1.0.0",
+      "description": "ELF header for both classes, following the program and section header tables to their offsets.",
+      "author": "Nybble",
+      "category": "executable",
+      "tags": [
+        "executable",
+        "linux",
+        "unix",
+        "binary",
+        "shared-object",
+        "core-dump"
+      ],
+      "formats": [
+        {
+          "name": "ELF",
+          "extension": "elf",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/elf/plugin.toml"
+    },
+    {
+      "id": "evtx",
+      "name": "Windows event log",
+      "version": "1.0.0",
+      "description": "Windows EVTX event log: the file header and every 64 KiB chunk header, with the record numbering that survives rollover.",
+      "author": "Nybble",
+      "category": "system",
+      "tags": [
+        "system",
+        "windows",
+        "event-log",
+        "forensics",
+        "dfir"
+      ],
+      "formats": [
+        {
+          "name": "EVTX",
+          "extension": "evtx",
+          "detects": true,
+          "confidence": 98
+        }
+      ],
+      "path": "formats/evtx/plugin.toml"
+    },
+    {
       "id": "ext4",
       "name": "ext2/3/4 superblock",
       "version": "1.0.0",
@@ -210,6 +284,37 @@
       "path": "formats/ext4/plugin.toml"
     },
     {
+      "id": "fat",
+      "name": "FAT boot sector",
+      "version": "1.0.0",
+      "description": "FAT12/16 and FAT32 boot sectors: the BIOS parameter block and the extended block that names the volume.",
+      "author": "Nybble",
+      "category": "filesystem",
+      "tags": [
+        "filesystem",
+        "fat",
+        "fat32",
+        "boot-sector",
+        "dos",
+        "removable"
+      ],
+      "formats": [
+        {
+          "name": "FAT16",
+          "extension": "img",
+          "detects": true,
+          "confidence": 90
+        },
+        {
+          "name": "FAT32",
+          "extension": "img",
+          "detects": true,
+          "confidence": 90
+        }
+      ],
+      "path": "formats/fat/plugin.toml"
+    },
+    {
       "id": "flac",
       "name": "FLAC audio",
       "version": "1.0.0",
@@ -230,6 +335,55 @@
         }
       ],
       "path": "formats/flac/plugin.toml"
+    },
+    {
+      "id": "flv",
+      "name": "FLV video",
+      "version": "1.0.0",
+      "description": "Flash Video: header and the full tag stream, with audio, video and script tag headers decoded.",
+      "author": "Nybble",
+      "category": "video",
+      "tags": [
+        "video",
+        "audio",
+        "flash",
+        "container",
+        "streaming"
+      ],
+      "formats": [
+        {
+          "name": "FLV",
+          "extension": "flv",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/flv/plugin.toml"
+    },
+    {
+      "id": "gameboy",
+      "name": "Game Boy ROM",
+      "version": "1.0.0",
+      "description": "Game Boy and Game Boy Color cartridge header at 0x100: title, mapper, ROM and RAM sizes, and both checksums.",
+      "author": "Nybble",
+      "category": "game",
+      "tags": [
+        "game",
+        "rom",
+        "nintendo",
+        "gameboy",
+        "emulation",
+        "cartridge"
+      ],
+      "formats": [
+        {
+          "name": "GB",
+          "extension": "gb",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/gameboy/plugin.toml"
     },
     {
       "id": "gif",
@@ -300,6 +454,30 @@
       "path": "formats/gpt/plugin.toml"
     },
     {
+      "id": "gzip",
+      "name": "gzip compressed",
+      "version": "1.0.0",
+      "description": "gzip member header, including the optional extra field, original file name and comment.",
+      "author": "Nybble",
+      "category": "archive",
+      "tags": [
+        "archive",
+        "compression",
+        "gzip",
+        "deflate",
+        "unix"
+      ],
+      "formats": [
+        {
+          "name": "GZIP",
+          "extension": "gz",
+          "detects": true,
+          "confidence": 90
+        }
+      ],
+      "path": "formats/gzip/plugin.toml"
+    },
+    {
       "id": "ico",
       "name": "Windows icon / cursor",
       "version": "1.0.0",
@@ -320,6 +498,37 @@
         }
       ],
       "path": "formats/ico/plugin.toml"
+    },
+    {
+      "id": "iso9660",
+      "name": "ISO 9660 image",
+      "version": "1.0.0",
+      "description": "ISO 9660 CD/DVD image: the primary volume descriptor at 32 KiB, its root directory record, and the El Torito boot record.",
+      "author": "Nybble",
+      "category": "filesystem",
+      "tags": [
+        "filesystem",
+        "optical",
+        "cdrom",
+        "iso",
+        "boot",
+        "el-torito"
+      ],
+      "formats": [
+        {
+          "name": "ISO9660",
+          "extension": "iso",
+          "detects": true,
+          "confidence": 95
+        },
+        {
+          "name": "El Torito",
+          "extension": "iso",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/iso9660/plugin.toml"
     },
     {
       "id": "java-class",
@@ -570,6 +779,55 @@
       "path": "formats/mp4/plugin.toml"
     },
     {
+      "id": "nes",
+      "name": "NES ROM",
+      "version": "1.0.0",
+      "description": "iNES / NES 2.0 cartridge dump: the 16-byte header with the mapper and mirroring flags, and the PRG and CHR banks sized from it.",
+      "author": "Nybble",
+      "category": "game",
+      "tags": [
+        "game",
+        "rom",
+        "nintendo",
+        "nes",
+        "emulation",
+        "cartridge"
+      ],
+      "formats": [
+        {
+          "name": "NES",
+          "extension": "nes",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/nes/plugin.toml"
+    },
+    {
+      "id": "ntfs",
+      "name": "NTFS boot sector",
+      "version": "1.0.0",
+      "description": "NTFS boot sector: geometry, the clusters holding the MFT and its mirror, and the volume serial number.",
+      "author": "Nybble",
+      "category": "filesystem",
+      "tags": [
+        "filesystem",
+        "ntfs",
+        "windows",
+        "boot-sector",
+        "forensics"
+      ],
+      "formats": [
+        {
+          "name": "NTFS",
+          "extension": "img",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/ntfs/plugin.toml"
+    },
+    {
       "id": "ogg",
       "name": "Ogg container",
       "version": "1.0.0",
@@ -642,6 +900,79 @@
       "path": "formats/pcapng/plugin.toml"
     },
     {
+      "id": "pe",
+      "name": "PE executable",
+      "version": "1.0.0",
+      "description": "Windows PE: the DOS stub, the COFF and optional headers (PE32 and PE32+), data directories and the section table.",
+      "author": "Nybble",
+      "category": "executable",
+      "tags": [
+        "executable",
+        "windows",
+        "pe",
+        "dll",
+        "binary",
+        "malware"
+      ],
+      "formats": [
+        {
+          "name": "PE",
+          "extension": "exe",
+          "detects": true,
+          "confidence": 70
+        }
+      ],
+      "path": "formats/pe/plugin.toml"
+    },
+    {
+      "id": "png",
+      "name": "PNG image",
+      "version": "1.0.0",
+      "description": "PNG signature and full chunk walk, with IHDR and the common ancillary chunks decoded.",
+      "author": "Nybble",
+      "category": "image",
+      "tags": [
+        "image",
+        "graphics",
+        "raster",
+        "lossless",
+        "chunked"
+      ],
+      "formats": [
+        {
+          "name": "PNG",
+          "extension": "png",
+          "detects": true,
+          "confidence": 98
+        }
+      ],
+      "path": "formats/png/plugin.toml"
+    },
+    {
+      "id": "psd",
+      "name": "Photoshop document",
+      "version": "1.0.0",
+      "description": "Photoshop PSD/PSB: the file header and the four length-prefixed sections that follow it.",
+      "author": "Nybble",
+      "category": "image",
+      "tags": [
+        "image",
+        "photoshop",
+        "layers",
+        "raster",
+        "adobe"
+      ],
+      "formats": [
+        {
+          "name": "PSD",
+          "extension": "psd",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/psd/plugin.toml"
+    },
+    {
       "id": "qoi",
       "name": "QOI image",
       "version": "1.0.0",
@@ -691,6 +1022,67 @@
         }
       ],
       "path": "formats/rar/plugin.toml"
+    },
+    {
+      "id": "regf",
+      "name": "Windows registry hive",
+      "version": "1.0.0",
+      "description": "Windows registry hive: the base block, the hive bin chain, and the root key cell followed to its offset.",
+      "author": "Nybble",
+      "category": "system",
+      "tags": [
+        "system",
+        "windows",
+        "registry",
+        "hive",
+        "forensics",
+        "dfir"
+      ],
+      "formats": [
+        {
+          "name": "REGF",
+          "extension": "hiv",
+          "detects": true,
+          "confidence": 98
+        }
+      ],
+      "path": "formats/regf/plugin.toml"
+    },
+    {
+      "id": "sqlite",
+      "name": "SQLite database",
+      "version": "1.0.0",
+      "description": "SQLite 3 database header and the b-tree page header of page 1, plus the WAL and journal sidecar files.",
+      "author": "Nybble",
+      "category": "database",
+      "tags": [
+        "database",
+        "sqlite",
+        "btree",
+        "forensics",
+        "wal"
+      ],
+      "formats": [
+        {
+          "name": "SQLite",
+          "extension": "sqlite",
+          "detects": true,
+          "confidence": 98
+        },
+        {
+          "name": "SQLite WAL",
+          "extension": "wal",
+          "detects": true,
+          "confidence": 90
+        },
+        {
+          "name": "SQLite journal",
+          "extension": "db-journal",
+          "detects": true,
+          "confidence": 90
+        }
+      ],
+      "path": "formats/sqlite/plugin.toml"
     },
     {
       "id": "squashfs",
@@ -932,6 +1324,31 @@
         }
       ],
       "path": "formats/xz/plugin.toml"
+    },
+    {
+      "id": "zip",
+      "name": "ZIP archive",
+      "version": "1.0.0",
+      "description": "ZIP archive: walks every record — local files, the central directory, and the end-of-central-directory records, Zip64 included.",
+      "author": "Nybble",
+      "category": "archive",
+      "tags": [
+        "archive",
+        "compression",
+        "zip",
+        "deflate",
+        "jar",
+        "apk"
+      ],
+      "formats": [
+        {
+          "name": "ZIP",
+          "extension": "zip",
+          "detects": true,
+          "confidence": 90
+        }
+      ],
+      "path": "formats/zip/plugin.toml"
     },
     {
       "id": "zstd",

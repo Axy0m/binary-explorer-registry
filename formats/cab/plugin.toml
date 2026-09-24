@@ -1,0 +1,91 @@
+id = "cab"
+name = "Microsoft Cabinet"
+version = "1.0.0"
+description = "Microsoft Cabinet (.cab): header with its optional reserve and chained-cabinet fields, the folder table, and the file table followed to its offset."
+author = "Nybble"
+
+[[formats]]
+name = "CAB"
+extension = "cab"
+description = "Microsoft Cabinet archive"
+confidence = 95
+entry = "Cab"
+endian = "le"
+# "MSCF"
+detect = [{ offset = 0, hex = "4D 53 43 46" }]
+schema = """
+// Microsoft Cabinet - the archive behind .msi payloads, Windows updates and
+// old setup.exe installers. Its structure is two levels: files are grouped
+// into folders, and a folder is one compressed stream. That is what makes CAB
+// solid-compressed - several small files in one folder share a dictionary -
+// and it is why extracting one file can mean decompressing the ones before it.
+//
+// The header has three optional tails, each switched on by a flag: a reserve
+// area, and the names of the previous and next cabinet when the set spans
+// several files. The folder table starts right after them, and the file table
+// is followed to coffFiles by pointer, so the two never have to guess at each
+// other.
+//
+// Each CFFOLDER may carry its own reserve area of cbCFFolder bytes. That is
+// almost always zero, and the folder table below assumes it; a cabinet written
+// by a tool that uses folder reserves needs that length added per entry.
+
+bitfield CabFlags : u16 {
+    prevCabinet    0 // this cabinet continues one that came before
+    nextCabinet    1 // this cabinet is continued by another
+    reservePresent 2 // the reserve fields below are present
+}
+
+// typeCompress packs the method into the low nibble and, for LZX and Quantum,
+// the window size into the byte above it: 0x1503 is LZX with a 2^21 window.
+bitfield CabCompression : u16 {
+    method     0..3  // 0 none, 1 MSZIP, 2 Quantum, 3 LZX
+    windowBits 8..12 // window size as a power of two, for Quantum and LZX
+}
+
+// CFFOLDER - one compressed stream, holding one or more files.
+struct CabFolder {
+    coffCabStart u32            "file offset of the first CFDATA block of this folder"
+    cCFData      u16            "CFDATA blocks in this folder"
+    typeCompress CabCompression "compression used for the whole stream"
+}
+
+// CFFILE - one file inside a folder, at an offset into the decompressed stream.
+struct CabFile {
+    cbFile          u32 "uncompressed size of this file"
+    uoffFolderStart u32 "offset of this file in the folder decompressed stream"
+    iFolder         u16 "folder index; 0xFFFD/0xFFFE/0xFFFF mean it spans cabinets"
+    date            u16 "last modification date (MS-DOS packed)"
+    time            u16 "last modification time (MS-DOS packed)"
+    attribs         u16 "attributes; bit 7 marks the name as UTF-8 rather than CP437"
+    name            cstring "file name, backslash separated, NUL-terminated"
+}
+
+struct Cab {
+    signature    char[4]  "MSCF"
+    reserved1    u32      "reserved, zero"
+    cbCabinet    u32      "total size of this cabinet file"
+    reserved2    u32      "reserved, zero"
+    coffFiles    u32      "file offset of the first CFFILE entry"
+    reserved3    u32      "reserved, zero"
+    versionMinor u8       "3"
+    versionMajor u8       "1"
+    cFolders     u16      "CFFOLDER entries in this cabinet"
+    cFiles       u16      "CFFILE entries in this cabinet"
+    flags        CabFlags "which optional fields follow"
+    setID        u16      "identifier shared by every cabinet in a set"
+    iCabinet     u16      "position of this cabinet in the set, from 0"
+    cbCFHeader   u16 if flags.reservePresent "bytes of reserve area in this header"
+    cbCFFolder   u8  if flags.reservePresent "bytes of reserve area per folder entry"
+    cbCFData     u8  if flags.reservePresent "bytes of reserve area per data block"
+    abReserve    bytes[cbCFHeader] if flags.reservePresent "application-defined header reserve"
+    szCabinetPrev cstring if flags.prevCabinet "file name of the previous cabinet"
+    szDiskPrev    cstring if flags.prevCabinet "name of the disk holding it"
+    szCabinetNext cstring if flags.nextCabinet "file name of the next cabinet"
+    szDiskNext    cstring if flags.nextCabinet "name of the disk holding it"
+    folders       CabFolder[cFolders] "the folder table"
+    // The file table, followed to coffFiles. Placed by pointer: the names are
+    // variable length, so nothing else could find the end of the table.
+    files at coffFiles CabFile[cFiles] "the file table"
+}
+"""

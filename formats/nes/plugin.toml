@@ -1,0 +1,63 @@
+id = "nes"
+name = "NES ROM"
+version = "1.0.0"
+description = "iNES / NES 2.0 cartridge dump: the 16-byte header with the mapper and mirroring flags, and the PRG and CHR banks sized from it."
+author = "Nybble"
+
+[[formats]]
+name = "NES"
+extension = "nes"
+description = "iNES / NES 2.0 cartridge ROM image"
+confidence = 95
+entry = "Nes"
+endian = "le"
+# "NES" 1A
+detect = [{ offset = 0, hex = "4E 45 53 1A" }]
+schema = """
+// iNES - the header every NES emulator reads. A cartridge is not a program
+// file; it is the contents of two ROM chips wired to the console, and the
+// header exists only because a dump on its own cannot say how they were
+// wired. PRG ROM is what the CPU sees, CHR ROM is what the picture unit sees,
+// and the mapper number names the bank-switching hardware on the cartridge
+// that made both bigger than the address space allowed.
+//
+// The mapper number is split across two nibbles in two different bytes, a
+// consequence of the format growing one field at a time; it is recombined
+// below. NES 2.0 extends the same header - flags7 bits 2-3 read as 2 - and
+// reinterprets the later bytes, so those are left as raw flags here.
+//
+// A cartridge with no CHR ROM had CHR RAM instead, and chrRomSize is 0.
+
+bitfield NesFlags6 : u8 {
+    mirroring  0    // 0 = horizontal, 1 = vertical
+    battery    1    // battery-backed save RAM at 0x6000
+    trainer    2    // a 512-byte trainer precedes the PRG data
+    fourScreen 3    // four-screen VRAM, ignoring the mirroring bit
+    mapperLow  4..7 // low nibble of the mapper number
+}
+
+bitfield NesFlags7 : u8 {
+    vsUnisystem 0    // arcade VS. System cartridge
+    playChoice  1    // PlayChoice-10 cartridge, with 8 KB of extra data
+    nes2        2..3 // 2 marks a NES 2.0 header
+    mapperHigh  4..7 // high nibble of the mapper number
+}
+
+struct Nes {
+    magic      bytes[4]   "4E 45 53 1A"
+    prgRomSize u8         "PRG ROM in 16 KiB units: what the CPU executes"
+    chrRomSize u8         "CHR ROM in 8 KiB units: tile data; 0 means CHR RAM"
+    flags6     NesFlags6  "mirroring, battery, trainer, and the low mapper nibble"
+    flags7     NesFlags7  "console type, NES 2.0 marker, and the high mapper nibble"
+    mapper     = flags7.mapperHigh * 16 + flags6.mapperLow
+    flags8     u8         "PRG RAM size in iNES; mapper bits 8-11 in NES 2.0"
+    flags9     u8         "TV system in iNES; ROM size upper bits in NES 2.0"
+    flags10    u8         "unofficial TV system and PRG RAM flags"
+    padding    bytes[5]   "zero; a NES 2.0 header uses these"
+    prgBytes   = prgRomSize * 16384
+    chrBytes   = chrRomSize * 8192
+    trainer    bytes[512] if flags6.trainer "512-byte trainer, mapped at 0x7000"
+    prgRom     bytes[prgBytes] "program ROM, mapped at 0x8000"
+    chrRom     bytes[chrBytes] "character ROM: the pattern tables"
+}
+"""

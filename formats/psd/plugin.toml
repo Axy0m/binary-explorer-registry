@@ -1,0 +1,66 @@
+id = "psd"
+name = "Photoshop document"
+version = "1.0.0"
+description = "Photoshop PSD/PSB: the file header and the four length-prefixed sections that follow it."
+author = "Nybble"
+
+[[formats]]
+name = "PSD"
+extension = "psd"
+description = "Adobe Photoshop document"
+confidence = 95
+entry = "Psd"
+endian = "be"
+# "8BPS" then version 1 (PSD) or 2 (PSB).
+detect = [{ offset = 0, hex = "38 42 50 53" }]
+schema = """
+// Photoshop document - big-endian, and unusually tidy for a native application
+// format: a fixed 26-byte header, then four sections, each introduced by its
+// own length. That means the whole file can be walked without understanding
+// any of it, which is what makes the layout below possible.
+//
+// The sections are, in order: the colour mode data (a palette, for indexed and
+// duotone images), the image resources (a grab bag of ICC profiles, guides,
+// slices, thumbnails and the like), the layer and mask information, and
+// finally the flattened composite image that other applications read.
+//
+// PSB is the same format with 64-bit lengths, used for documents over 30000
+// pixels on a side. Version 2 marks one; the lengths below are the PSD form.
+
+enum PsdColorMode : u16 {
+    Bitmap       = 0
+    Grayscale    = 1
+    Indexed      = 2
+    Rgb          = 3
+    Cmyk         = 4
+    Multichannel = 7
+    Duotone      = 8
+    Lab          = 9
+}
+
+enum PsdCompression : u16 {
+    Raw              = 0
+    Rle              = 1 // PackBits, per scanline
+    ZipNoPrediction  = 2
+    ZipWithPrediction = 3
+}
+
+struct Psd {
+    signature   char[4]  "8BPS"
+    version     u16      "1 = PSD, 2 = PSB with 64-bit section lengths"
+    reserved    bytes[6] "zero"
+    channels    u16      "colour channels including alpha, 1 to 56"
+    height      u32      "image height in pixels"
+    width       u32      "image width in pixels"
+    depth       u16      "bits per channel: 1, 8, 16 or 32"
+    colorMode   PsdColorMode "how the channels are interpreted"
+    colorDataLength u32  "bytes of colour mode data; 0 unless indexed or duotone"
+    colorData   bytes[colorDataLength] "the palette, for indexed and duotone images"
+    resourcesLength u32  "bytes of image resources"
+    resources   bytes[resourcesLength] "8BIM resource blocks: profiles, guides, thumbnail"
+    layerMaskLength u32  "bytes of layer and mask information"
+    layerMask   bytes[layerMaskLength] "the layer records, channel data and masks"
+    compression PsdCompression "how the composite image below is packed"
+    imageData   bytes[*] "the flattened composite, one plane per channel"
+}
+"""

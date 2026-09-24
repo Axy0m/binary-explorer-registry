@@ -1,0 +1,108 @@
+id = "png"
+name = "PNG image"
+version = "1.0.0"
+description = "PNG signature and full chunk walk, with IHDR and the common ancillary chunks decoded."
+author = "Nybble"
+
+[[formats]]
+name = "PNG"
+extension = "png"
+description = "Portable Network Graphics image"
+confidence = 98
+entry = "Png"
+endian = "be"
+detect = [{ offset = 0, hex = "89 50 4E 47 0D 0A 1A 0A" }]
+schema = """
+// PNG — big-endian throughout. An 8-byte signature, then a chain of chunks:
+// a length, a four-character type, that many bytes of data, and a CRC-32 over
+// the type and the data. Everything is walked by `length` alone, so unknown
+// chunks cost nothing, and the chunk types worth reading are decoded through a
+// pointer that consumes no bytes of its own.
+//
+// The signature is chosen to survive damage: the high bit catches 7-bit
+// transfers, and the CR/LF/EOF bytes catch line-ending translation.
+
+enum PngColorType : u8 {
+    Grayscale      = 0
+    Rgb            = 2
+    Palette        = 3
+    GrayscaleAlpha = 4
+    Rgba           = 6
+}
+
+enum PngInterlace : u8 {
+    NoInterlace = 0
+    Adam7       = 1
+}
+
+// IHDR — always the first chunk, and the one that says what the image is.
+struct PngIhdr {
+    width       u32          "image width (px)"
+    height      u32          "image height (px)"
+    bitDepth    u8           "bits per sample: 1, 2, 4, 8 or 16"
+    colorType   PngColorType "what each pixel stores"
+    compression u8           "0 = deflate; no other method is defined"
+    filter      u8           "0 = adaptive filtering, five filter types"
+    interlace   PngInterlace "interlace method"
+}
+
+// pHYs — physical pixel dimensions, the closest thing PNG has to a DPI field.
+struct PngPhys {
+    pixelsPerUnitX u32 "pixels per unit, x axis"
+    pixelsPerUnitY u32 "pixels per unit, y axis"
+    unit           u8  "0 = unit unknown (aspect ratio only), 1 = metre"
+}
+
+// tIME — last modification time, always UTC.
+struct PngTime {
+    year   u16 "full year"
+    month  u8  "1..12"
+    day    u8  "1..31"
+    hour   u8  "0..23"
+    minute u8  "0..59"
+    second u8  "0..60 (60 for a leap second)"
+}
+
+// sRGB — declares the image is in the sRGB color space.
+struct PngSrgb {
+    renderingIntent u8 "0 perceptual, 1 relative, 2 saturation, 3 absolute"
+}
+
+// gAMA — image gamma, stored as an integer to avoid floats.
+struct PngGama {
+    gamma u32 "gamma times 100000 (45455 is the usual 1/2.2)"
+}
+
+// acTL — animation control, the chunk that makes a PNG an APNG.
+struct PngActl {
+    numFrames u32 "number of frames"
+    numPlays  u32 "times to loop, 0 for forever"
+}
+
+struct PngChunk {
+    length u32          "bytes of chunk data; the type and CRC are not counted"
+    type   char[4]      "chunk type; a lowercase first letter marks it ancillary"
+    data   bytes[length] "chunk data"
+    crc    u32          "CRC-32 of the type and the data"
+    // Typed view of the data. Placed by pointer, so it reads no bytes of its
+    // own and the chunk walk above stays exact whatever the type turns out
+    // to be.
+    decoded at +8 match type {
+        "IHDR" => PngIhdr
+        "pHYs" => PngPhys
+        "tIME" => PngTime
+        "sRGB" => PngSrgb
+        "gAMA" => PngGama
+        "acTL" => PngActl
+        "tEXt" => string[length]
+        "zTXt" => string[length]
+        "iTXt" => string[length]
+        default => bytes[0]
+    }
+}
+
+struct Png {
+    signature bytes[8]        "89 50 4E 47 0D 0A 1A 0A"
+    chunks    repeat PngChunk "every chunk in order: IHDR first, IEND last"
+}
+"""

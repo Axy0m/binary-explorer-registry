@@ -1,0 +1,230 @@
+id = "elf"
+name = "ELF executable"
+version = "1.0.0"
+description = "ELF header for both classes, following the program and section header tables to their offsets."
+author = "Nybble"
+
+[[formats]]
+name = "ELF"
+extension = "elf"
+description = "ELF executable, shared object or core dump (little-endian)"
+confidence = 95
+entry = "Elf"
+endian = "le"
+# 7F "ELF", then e_ident[5] = 1 (two's complement little-endian). Big-endian
+# ELF (some MIPS, PowerPC, SPARC and s390 builds) is deliberately not matched:
+# every field after e_ident would need the other byte order.
+detect = [{ offset = 0, hex = "7F 45 4C 46" }, { offset = 5, hex = "01" }]
+schema = """
+// ELF - the Unix executable, shared object and core dump container. The first
+// sixteen bytes (e_ident) are byte-order and width independent on purpose: they
+// say what the rest of the file is before anything else is read. Everything
+// after them changes width with the class, so the wide fields appear twice
+// below, each guarded by ident.class; only one set is ever present.
+//
+// A file carries two views of the same bytes. The program headers are the
+// loader's view, a list of chunks to map and where to map them. The section
+// headers are the linker's view: .text, .data, .symtab and friends. Both
+// tables are followed here from the offsets in the header, by pointer, so the
+// header itself stays exactly ehsize bytes long.
+
+enum ElfClass : u8 {
+    NoClass = 0
+    Elf32   = 1
+    Elf64   = 2
+}
+
+enum ElfData : u8 {
+    NoData       = 0
+    LittleEndian = 1
+    BigEndian    = 2
+}
+
+enum ElfOsAbi : u8 {
+    SystemV    = 0
+    HpUx       = 1
+    NetBsd     = 2
+    Linux      = 3
+    Solaris    = 6
+    Aix        = 7
+    Irix       = 8
+    FreeBsd    = 9
+    OpenBsd    = 12
+    ArmAeabi   = 64
+    Arm        = 97
+    Standalone = 255
+}
+
+enum ElfType : u16 {
+    NoType = 0
+    Rel    = 1
+    Exec   = 2
+    Dyn    = 3
+    Core   = 4
+}
+
+enum ElfMachine : u16 {
+    NoMachine = 0
+    Sparc     = 2
+    I386      = 3
+    M68k      = 4
+    Mips      = 8
+    PowerPc   = 20
+    PowerPc64 = 21
+    S390      = 22
+    Arm       = 40
+    SuperH    = 42
+    SparcV9   = 43
+    Ia64      = 50
+    X86_64    = 62
+    Aarch64   = 183
+    RiscV     = 243
+    Bpf       = 247
+    LoongArch = 258
+}
+
+enum ElfSegmentType : u32 {
+    Null        = 0
+    Load        = 1
+    Dynamic     = 2
+    Interp      = 3
+    Note        = 4
+    Shlib       = 5
+    Phdr        = 6
+    Tls         = 7
+    GnuEhFrame  = 0x6474E550
+    GnuStack    = 0x6474E551
+    GnuRelro    = 0x6474E552
+    GnuProperty = 0x6474E553
+}
+
+enum ElfSectionType : u32 {
+    Null          = 0
+    Progbits      = 1
+    Symtab        = 2
+    Strtab        = 3
+    Rela          = 4
+    Hash          = 5
+    Dynamic       = 6
+    Note          = 7
+    Nobits        = 8
+    Rel           = 9
+    Shlib         = 10
+    Dynsym        = 11
+    InitArray     = 14
+    FiniArray     = 15
+    PreinitArray  = 16
+    Group         = 17
+    SymtabShndx   = 18
+    GnuAttributes = 0x6FFFFFF5
+    GnuHash       = 0x6FFFFFF6
+    GnuVerdef     = 0x6FFFFFFD
+    GnuVerneed    = 0x6FFFFFFE
+    GnuVersym     = 0x6FFFFFFF
+}
+
+bitfield ElfSegmentFlags : u32 {
+    execute 0
+    write   1
+    read    2
+}
+
+bitfield ElfSectionFlags : u32 {
+    write           0  // writable at run time
+    alloc           1  // occupies memory in the loaded image
+    execinstr       2  // executable machine instructions
+    merge           4  // may be merged to remove duplicates
+    strings         5  // holds NUL-terminated strings
+    infoLink        6  // info holds a section header index
+    linkOrder       7  // ordering constraints on linking
+    osNonconforming 8
+    group           9  // member of a section group
+    tls             10 // thread-local storage
+    compressed      11 // contents are compressed, prefixed by a compression header
+}
+
+// e_ident - the sixteen bytes every ELF reader parses before anything else.
+struct ElfIdent {
+    magic      bytes[4] "7F 45 4C 46, the ELF magic"
+    class      ElfClass "32- or 64-bit; sets the width of every offset below"
+    data       ElfData  "byte order of everything after e_ident"
+    version    u8       "ELF header version, always 1"
+    osabi      ElfOsAbi "target ABI; Linux binaries usually still say SystemV"
+    abiversion u8       "ABI version"
+    padding    bytes[7] "reserved, zero"
+}
+
+struct Elf32ProgramHeader {
+    type   ElfSegmentType  "what this segment is for"
+    offset u32             "file offset of the segment"
+    vaddr  u32             "virtual address to map it at"
+    paddr  u32             "physical address, where that is meaningful"
+    filesz u32             "bytes present in the file"
+    memsz  u32             "bytes in memory; the excess is zero-filled (.bss)"
+    flags  ElfSegmentFlags "read / write / execute"
+    align  u32             "alignment; offset and vaddr agree modulo this"
+}
+
+struct Elf64ProgramHeader {
+    type   ElfSegmentType  "what this segment is for"
+    flags  ElfSegmentFlags "read / write / execute"
+    offset u64             "file offset of the segment"
+    vaddr  u64             "virtual address to map it at"
+    paddr  u64             "physical address, where that is meaningful"
+    filesz u64             "bytes present in the file"
+    memsz  u64             "bytes in memory; the excess is zero-filled (.bss)"
+    align  u64             "alignment; offset and vaddr agree modulo this"
+}
+
+struct Elf32SectionHeader {
+    name      u32             "offset of this name in the section name strings"
+    type      ElfSectionType  "what the section holds"
+    flags     ElfSectionFlags "section attributes"
+    addr      u32             "virtual address in the loaded image, or 0"
+    offset    u32             "file offset of the contents"
+    size      u32             "size in bytes (a Nobits section occupies none)"
+    link      u32             "linked section index; meaning depends on type"
+    info      u32             "extra info; meaning depends on type"
+    addralign u32             "required alignment"
+    entsize   u32             "size of one entry, for table sections"
+}
+
+struct Elf64SectionHeader {
+    name      u32            "offset of this name in the section name strings"
+    type      ElfSectionType "what the section holds"
+    flags     u64            "section attributes, same bits as the 32-bit form"
+    addr      u64            "virtual address in the loaded image, or 0"
+    offset    u64            "file offset of the contents"
+    size      u64            "size in bytes (a Nobits section occupies none)"
+    link      u32            "linked section index; meaning depends on type"
+    info      u32            "extra info; meaning depends on type"
+    addralign u64            "required alignment"
+    entsize   u64            "size of one entry, for table sections"
+}
+
+struct Elf {
+    ident     ElfIdent   "e_ident: magic, class, byte order, ABI"
+    type      ElfType    "object file type"
+    machine   ElfMachine "target architecture"
+    version   u32        "object file version, always 1"
+    entry32   u32 if ident.class == 1 "entry point virtual address"
+    phoff32   u32 if ident.class == 1 "file offset of the program header table"
+    shoff32   u32 if ident.class == 1 "file offset of the section header table"
+    entry64   u64 if ident.class == 2 "entry point virtual address"
+    phoff64   u64 if ident.class == 2 "file offset of the program header table"
+    shoff64   u64 if ident.class == 2 "file offset of the section header table"
+    flags     u32 "processor-specific flags"
+    ehsize    u16 "size of this header: 52 for 32-bit, 64 for 64-bit"
+    phentsize u16 "size of one program header entry"
+    phnum     u16 "number of program header entries"
+    shentsize u16 "size of one section header entry"
+    shnum     u16 "number of section header entries"
+    shstrndx  u16 "index of the section holding the section name strings"
+    // Both tables, followed to their offsets. Placed by pointer, so they read
+    // no bytes here and the header above stays exactly ehsize long.
+    programHeaders32 at phoff32 Elf32ProgramHeader[phnum] if ident.class == 1 "the loader's view: what to map, and where"
+    programHeaders64 at phoff64 Elf64ProgramHeader[phnum] if ident.class == 2 "the loader's view: what to map, and where"
+    sectionHeaders32 at shoff32 Elf32SectionHeader[shnum] if ident.class == 1 "the linker's view: .text, .data, .symtab, ..."
+    sectionHeaders64 at shoff64 Elf64SectionHeader[shnum] if ident.class == 2 "the linker's view: .text, .data, .symtab, ..."
+}
+"""

@@ -1,0 +1,72 @@
+id = "evtx"
+name = "Windows event log"
+version = "1.0.0"
+description = "Windows EVTX event log: the file header and every 64 KiB chunk header, with the record numbering that survives rollover."
+author = "Nybble"
+
+[[formats]]
+name = "EVTX"
+extension = "evtx"
+description = "Windows Vista and later event log"
+confidence = 98
+entry = "Evtx"
+endian = "le"
+# "ElfFile" 00
+detect = [{ offset = 0, hex = "45 6C 66 46 69 6C 65 00" }]
+schema = """
+// EVTX - the event log Windows has written since Vista, and one of the first
+// files pulled in an intrusion investigation. Its shape is a circular buffer:
+// a 4 KiB file header, then a run of 64 KiB chunks, each self-contained with
+// its own record range and checksums. When the log fills, the oldest chunk is
+// overwritten rather than the file being rewritten, which is why the record
+// numbers in the header matter more than the chunk order on disk.
+//
+// That design is also what makes a truncated or carved EVTX recoverable: any
+// surviving "ElfChnk" block can be parsed on its own, because a chunk carries
+// the string and template tables its records refer to.
+//
+// The records themselves are BinXML - a binary encoding of the event XML,
+// using per-chunk templates so repeated events store only their substitutions.
+// Decoding that needs a tokeniser, so records are left as bytes here; the
+// chunk headers below give the record numbers, offsets and checksums.
+
+bitfield EvtxFileFlags : u32 {
+    dirty 0 // records were written since the log was last cleanly closed
+    full  1 // the log has wrapped at least once
+}
+
+struct EvtxChunk {
+    magic                  char[8]   "ElfChnk, NUL-terminated"
+    firstEventRecordNumber u64       "logical number of the first record in this chunk"
+    lastEventRecordNumber  u64       "logical number of the last record"
+    firstEventRecordId     u64       "file-wide identifier of the first record"
+    lastEventRecordId      u64       "file-wide identifier of the last record"
+    headerSize             u32       "128"
+    lastRecordOffset       u32       "offset of the last record, from the chunk start"
+    freeSpaceOffset        u32       "offset of the free space after the last record"
+    eventRecordsChecksum   u32       "CRC-32 over the records area"
+    unused                 bytes[64] "zero"
+    unknown                u32       "flags, in practice zero"
+    checksum               u32       "CRC-32 of the first 120 bytes and the tables below"
+    commonStringOffsets    u32[64]   "hash buckets into the per-chunk string table"
+    templatePointers       u32[32]   "hash buckets into the per-chunk template table"
+    records                bytes[65024] "the BinXML event records filling the rest of the chunk"
+}
+
+struct Evtx {
+    magic             char[8]  "ElfFile, NUL-terminated"
+    firstChunkNumber  u64      "first chunk still in use, after any rollover"
+    lastChunkNumber   u64      "last chunk in use"
+    nextRecordId      u64      "identifier the next record written will get"
+    headerSize        u32      "128"
+    minorVersion      u16      "1"
+    majorVersion      u16      "3"
+    headerBlockSize   u16      "4096: the header occupies a full block"
+    chunkCount        u16      "chunks in the file"
+    unused            bytes[76] "zero"
+    fileFlags         EvtxFileFlags "dirty and wrapped flags"
+    checksum          u32      "CRC-32 of the first 120 bytes"
+    padding           bytes[3968] "zero, to the end of the 4 KiB header block"
+    chunks            repeat EvtxChunk "every 64 KiB chunk, in file order"
+}
+"""

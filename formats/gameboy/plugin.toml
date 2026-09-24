@@ -1,0 +1,109 @@
+id = "gameboy"
+name = "Game Boy ROM"
+version = "1.0.0"
+description = "Game Boy and Game Boy Color cartridge header at 0x100: title, mapper, ROM and RAM sizes, and both checksums."
+author = "Nybble"
+
+[[formats]]
+name = "GB"
+extension = "gb"
+description = "Game Boy / Game Boy Color cartridge ROM"
+confidence = 95
+entry = "GameBoy"
+endian = "le"
+# The Nintendo logo bitmap at 0x104. The boot ROM compares the cartridge copy
+# against its own and halts if they differ, so every real cartridge has it.
+detect = [{ offset = 260, hex = "CE ED 66 66 CC 0D 00 0B 03 73 00 83 00 0C 00 0D" }]
+schema = """
+// Game Boy cartridge - the header sits at 0x100, immediately after the
+// interrupt and RST vectors, because that is where the boot ROM hands control
+// over. The 48 bytes after the entry point are a bitmap of the Nintendo logo:
+// the boot ROM draws it and then compares it byte for byte against its own
+// copy, halting on any difference. It was a trademark lock, not a checksum,
+// and it is the most reliable way to recognise a Game Boy ROM.
+//
+// The header checksum is the other half of that lock. The boot ROM verifies it
+// too, so a ROM with the wrong value will not start on real hardware. The
+// global checksum over the whole cartridge is not verified and is often wrong
+// in dumps and hacks.
+//
+// The title field shrank over time. On the original it was 16 characters; the
+// Game Boy Color took the last five for the manufacturer code and the CGB
+// flag, which is why titles in later games are cut to 11.
+
+enum GbCartridgeType : u8 {
+    RomOnly              = 0x00
+    Mbc1                 = 0x01
+    Mbc1Ram              = 0x02
+    Mbc1RamBattery       = 0x03
+    Mbc2                 = 0x05
+    Mbc2Battery          = 0x06
+    RomRam               = 0x08
+    RomRamBattery        = 0x09
+    Mmm01                = 0x0B
+    Mmm01Ram             = 0x0C
+    Mmm01RamBattery      = 0x0D
+    Mbc3TimerBattery     = 0x0F
+    Mbc3TimerRamBattery  = 0x10
+    Mbc3                 = 0x11
+    Mbc3Ram              = 0x12
+    Mbc3RamBattery       = 0x13
+    Mbc5                 = 0x19
+    Mbc5Ram              = 0x1A
+    Mbc5RamBattery       = 0x1B
+    Mbc5Rumble           = 0x1C
+    Mbc5RumbleRam        = 0x1D
+    Mbc5RumbleRamBattery = 0x1E
+    Mbc6                 = 0x20
+    Mbc7SensorRumble     = 0x22
+    PocketCamera         = 0xFC
+    BandaiTama5          = 0xFD
+    Huc3                 = 0xFE
+    Huc1RamBattery       = 0xFF
+}
+
+enum GbRomSize : u8 {
+    Kib32  = 0 // 2 banks, no bank switching needed
+    Kib64  = 1
+    Kib128 = 2
+    Kib256 = 3
+    Kib512 = 4
+    Mib1   = 5
+    Mib2   = 6
+    Mib4   = 7
+    Mib8   = 8
+}
+
+enum GbRamSize : u8 {
+    NoRam  = 0
+    Unused = 1
+    Kib8   = 2
+    Kib32  = 3
+    Kib128 = 4
+    Kib64  = 5
+}
+
+enum GbDestination : u8 {
+    Japan    = 0
+    Overseas = 1
+}
+
+struct GameBoy {
+    vectors         bytes[256] "0x00-0xFF: the RST and interrupt vectors"
+    entryPoint      bytes[4]   "usually nop; jp 0x0150, run after the boot ROM"
+    logo            bytes[48]  "Nintendo logo bitmap, compared byte for byte at boot"
+    title           char[11]   "game title, upper case ASCII, NUL padded"
+    manufacturerCode char[4]   "four-character code, on later cartridges only"
+    cgbFlag         u8         "0x80 = Color enhanced, 0xC0 = Color only"
+    newLicensee     char[2]    "two-character publisher code, used when oldLicensee is 0x33"
+    sgbFlag         u8         "0x03 = supports the Super Game Boy commands"
+    cartridgeType   GbCartridgeType "the mapper and extras on the cartridge board"
+    romSize         GbRomSize  "cartridge ROM size"
+    ramSize         GbRamSize  "cartridge RAM size; 0 unless the type says RAM"
+    destination     GbDestination "sales region"
+    oldLicensee     u8         "publisher code; 0x33 means see newLicensee"
+    romVersion      u8         "revision of this title, usually 0"
+    headerChecksum  u8         "verified by the boot ROM over 0x134-0x14C"
+    globalChecksum  u16        "big-endian sum of every byte but these two, never verified"
+}
+"""

@@ -1,0 +1,5 @@
+category = "filesystem"
+tags = ["filesystem", "optical", "cdrom", "iso", "boot", "el-torito"]
+maintainer = "Nybble"
+homepage = "https://www.ecma-international.org/wp-content/uploads/ECMA-119_4th_edition_june_2019.pdf"
+sample = ""

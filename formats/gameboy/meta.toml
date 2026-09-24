@@ -1,0 +1,5 @@
+category = "game"
+tags = ["game", "rom", "nintendo", "gameboy", "emulation", "cartridge"]
+maintainer = "Nybble"
+homepage = "https://gbdev.io/pandocs/The_Cartridge_Header.html"
+sample = ""

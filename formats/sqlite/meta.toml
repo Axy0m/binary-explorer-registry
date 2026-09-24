@@ -1,0 +1,5 @@
+category = "database"
+tags = ["database", "sqlite", "btree", "forensics", "wal"]
+maintainer = "Nybble"
+homepage = "https://www.sqlite.org/fileformat2.html"
+sample = ""

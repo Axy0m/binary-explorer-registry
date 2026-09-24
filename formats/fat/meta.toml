@@ -1,0 +1,5 @@
+category = "filesystem"
+tags = ["filesystem", "fat", "fat32", "boot-sector", "dos", "removable"]
+maintainer = "Nybble"
+homepage = "https://download.microsoft.com/download/1/6/1/161ba512-40e2-4cc9-843a-923143f3456c/fatgen103.doc"
+sample = ""

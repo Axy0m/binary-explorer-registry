@@ -1,0 +1,5 @@
+category = "system"
+tags = ["system", "windows", "registry", "hive", "forensics", "dfir"]
+maintainer = "Nybble"
+homepage = "https://github.com/msuhanov/regf/blob/master/Windows%20registry%20file%20format%20specification.md"
+sample = ""

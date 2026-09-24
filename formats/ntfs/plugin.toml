@@ -1,0 +1,64 @@
+id = "ntfs"
+name = "NTFS boot sector"
+version = "1.0.0"
+description = "NTFS boot sector: geometry, the clusters holding the MFT and its mirror, and the volume serial number."
+author = "Nybble"
+
+[[formats]]
+name = "NTFS"
+extension = "img"
+description = "NTFS volume boot record"
+confidence = 95
+entry = "Ntfs"
+endian = "le"
+# "NTFS    " at offset 3, in the OEM name field, plus the 0xAA55 signature.
+detect = [
+    { offset = 3, hex = "4E 54 46 53 20 20 20 20" },
+    { offset = 510, hex = "55 AA" },
+]
+schema = """
+// NTFS boot sector - the first sector of the volume. It looks like a FAT boot
+// sector for the first eleven bytes, because it has to: the same BIOS loads
+// both. After that the BPB is mostly zeros, since NTFS keeps almost nothing
+// here. Everything the filesystem needs lives in the master file table, and
+// the only job of this sector is to say which cluster that table starts at.
+//
+// The MFT is itself a file, described by its own first record, so the volume
+// bootstraps from mftCluster. mftMirrorCluster points at a copy of the first
+// few records, kept elsewhere on the volume so a damaged MFT can be recovered.
+//
+// Two fields use a sign trick: when clustersPerFileRecord is positive it is a
+// count of clusters, and when it is negative the record size is 2 to the power
+// of its absolute value in bytes. That is how a 1024-byte MFT record fits on a
+// volume with 4096-byte clusters, which is the normal case - the value is
+// typically -10.
+
+struct Ntfs {
+    jump                  bytes[3] "EB 52 90: a jump to the boot code"
+    oemId                 char[8]  "NTFS followed by four spaces"
+    bytesPerSector        u16      "512 on essentially everything"
+    sectorsPerCluster     u8       "cluster size, a power of two"
+    reservedSectors       u16      "0 on NTFS"
+    unusedFats            bytes[3] "zero: where FAT keeps its table count"
+    unusedRootEntries     u16      "zero"
+    unusedTotalSectors    u16      "zero"
+    mediaDescriptor       u8       "0xF8 for a fixed disk"
+    unusedSectorsPerFat   u16      "zero"
+    sectorsPerTrack       u16      "disk geometry, for the BIOS"
+    numberOfHeads         u16      "disk geometry, for the BIOS"
+    hiddenSectors         u32      "sectors before this partition on the disk"
+    unusedTotalSectors32  u32      "zero"
+    unusedDriveNumber     u32      "usually 0x00800080"
+    totalSectors          u64      "sectors in the volume, one short of the partition"
+    mftCluster            u64      "first cluster of the master file table"
+    mftMirrorCluster      u64      "first cluster of the MFT mirror"
+    clustersPerFileRecord i8       "positive: clusters per record; negative: 2^-n bytes"
+    unused2               bytes[3] "zero"
+    clustersPerIndexBuffer i8      "same encoding, for index allocation buffers"
+    unused3               bytes[3] "zero"
+    volumeSerialNumber    u64      "64-bit volume serial, set at format time"
+    checksum              u32      "unused in practice, zero"
+    bootCode              bytes[426] "the boot code the jump above lands in"
+    endMarker             u16      "0xAA55, the sector signature"
+}
+"""

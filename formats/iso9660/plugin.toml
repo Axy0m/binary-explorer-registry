@@ -1,0 +1,187 @@
+id = "iso9660"
+name = "ISO 9660 image"
+version = "1.0.0"
+description = "ISO 9660 CD/DVD image: the primary volume descriptor at 32 KiB, its root directory record, and the El Torito boot record."
+author = "Nybble"
+
+[[formats]]
+name = "ISO9660"
+extension = "iso"
+description = "ISO 9660 optical disc image"
+confidence = 95
+entry = "Iso9660"
+endian = "le"
+# "CD001" at offset 32769: the identifier of the first volume descriptor,
+# which lives one byte into the descriptor at the start of sector 16.
+detect = [{ offset = 32769, hex = "43 44 30 30 31" }]
+schema = """
+// ISO 9660 - the CD-ROM filesystem, and still what a .iso file is. The first
+// sixteen 2048-byte sectors are the system area, reserved for whatever the
+// platform needs to boot; the filesystem proper starts at 32768 with a chain
+// of volume descriptors, terminated by one of type 255.
+//
+// Its defining quirk is that every multi-byte number is stored twice, once
+// little-endian and once big-endian, back to back, so a reader of either byte
+// order could use the disc without swapping. The pairs are shown here as two
+// fields; the two halves always agree.
+//
+// Dates come in two shapes: a 17-character ASCII form for the volume, down to
+// hundredths of a second, and a packed 7-byte form for directory entries.
+
+bitfield IsoFileFlags : u8 {
+    hidden      0 // hide this entry from the user
+    directory   1 // this entry is a directory
+    associated  2 // an associated file (a resource fork)
+    record      3 // the extended attribute record has record information
+    protection  4 // permissions are recorded in the extended attributes
+    multiExtent 7 // this is not the final extent of the file
+}
+
+// A directory record. 33 fixed bytes plus the name, padded to an even length.
+struct IsoDirectoryRecord {
+    length         u8           "length of this record, name and padding included"
+    extAttrLength  u8           "length of the extended attribute record, in sectors"
+    extentLe       u32          "first sector of the file contents"
+    extentBe       u32          "the same, big-endian"
+    dataLengthLe   u32          "size of the file in bytes"
+    dataLengthBe   u32          "the same, big-endian"
+    recordingDate  bytes[7]     "year since 1900, month, day, hour, minute, second, GMT offset"
+    flags          IsoFileFlags "directory, hidden, multi-extent, ..."
+    fileUnitSize   u8           "file unit size, for interleaved files"
+    interleaveGap  u8           "interleave gap size"
+    volumeSeqLe    u16          "volume in the set holding this file"
+    volumeSeqBe    u16          "the same, big-endian"
+    nameLength     u8           "length of the identifier that follows"
+    name           char[nameLength] "file name; 0x00 is . and 0x01 is .."
+}
+
+// The primary volume descriptor: what a reader needs to mount the disc.
+struct IsoPrimaryVolumeDescriptor {
+    type              u8       "1 for the primary volume descriptor"
+    identifier        char[5]  "CD001"
+    version           u8       "1"
+    unused            u8       "zero"
+    systemId          char[32] "system that can act on the first 16 sectors"
+    volumeId          char[32] "volume label"
+    unused2           bytes[8] "zero"
+    volumeSpaceSizeLe u32      "sectors on the volume"
+    volumeSpaceSizeBe u32      "the same, big-endian"
+    unused3           bytes[32] "zero"
+    volumeSetSizeLe   u16      "discs in the set"
+    volumeSetSizeBe   u16      "the same, big-endian"
+    volumeSeqLe       u16      "position of this disc in the set"
+    volumeSeqBe       u16      "the same, big-endian"
+    logicalBlockSizeLe u16     "sector size, effectively always 2048"
+    logicalBlockSizeBe u16     "the same, big-endian"
+    pathTableSizeLe   u32      "size of the path table in bytes"
+    pathTableSizeBe   u32      "the same, big-endian"
+    typeLPathTable    u32      "sector of the little-endian path table"
+    optTypeLPathTable u32      "sector of its optional copy, 0 if there is none"
+    typeMPathTable    u32      "sector of the big-endian path table (a big-endian value)"
+    optTypeMPathTable u32      "sector of its optional copy"
+    rootDirectory     IsoDirectoryRecord "the root directory record, always 34 bytes here"
+    volumeSetId       char[128] "name of the multi-disc set"
+    publisherId       char[128] "publisher"
+    dataPreparerId    char[128] "who prepared the data"
+    applicationId     char[128] "application that wrote the disc"
+    copyrightFileId   char[37]  "file in the root holding the copyright notice"
+    abstractFileId    char[37]  "file in the root holding the abstract"
+    bibliographicFileId char[37] "file in the root holding the bibliography"
+    creationDate      char[17]  "YYYYMMDDHHMMSSCC plus a GMT offset byte"
+    modificationDate  char[17]  "last modification"
+    expirationDate    char[17]  "after which the volume is obsolete"
+    effectiveDate     char[17]  "before which the volume should not be used"
+    fileStructureVersion u8     "1"
+    unused4           u8        "zero"
+    applicationUse    bytes[512] "free for the application that wrote the disc"
+    reserved          bytes[653] "reserved, zero"
+}
+
+struct Iso9660 {
+    systemArea bytes[32768] "sectors 0-15: boot sectors and partition maps, not ISO 9660"
+    pvd        IsoPrimaryVolumeDescriptor "the primary volume descriptor, at sector 16"
+}
+"""
+
+[[formats]]
+name = "El Torito"
+extension = "iso"
+description = "El Torito bootable-CD boot record volume descriptor"
+confidence = 95
+entry = "ElTorito"
+endian = "le"
+# "CD001" at 34817 plus the El Torito system identifier: the boot record
+# volume descriptor at sector 17, present only on bootable discs.
+detect = [
+    { offset = 34817, hex = "43 44 30 30 31" },
+    { offset = 34823, hex = "45 4C 20 54 4F 52 49 54 4F 20 53 50 45 43 49 46 49 43 41 54 49 4F 4E" },
+]
+schema = """
+// El Torito - the extension that makes a CD bootable. It adds a boot record
+// volume descriptor at sector 17, whose only real content is a pointer to the
+// boot catalog: a sector of 32-byte entries naming what to boot on which
+// platform. That catalog is followed here by pointer.
+//
+// The initial/default entry is the one a BIOS uses. Its emulation type says
+// whether the firmware should pretend the image is a floppy, a hard disk, or
+// nothing at all - "no emulation", which is what every modern install disc
+// uses, loading sectorCount sectors at loadSegment and jumping to them.
+
+enum ElToritoPlatform : u8 {
+    X86     = 0
+    PowerPc = 1
+    Mac     = 2
+    Efi     = 0xEF
+}
+
+enum ElToritoBootMedia : u8 {
+    NoEmulation  = 0
+    Floppy12M    = 1
+    Floppy144M   = 2
+    Floppy288M   = 3
+    HardDisk     = 4
+}
+
+// The first 32 bytes of the boot catalog: it validates the rest.
+struct ElToritoValidationEntry {
+    headerId   u8               "1"
+    platformId ElToritoPlatform "firmware the entries that follow are for"
+    reserved   u16              "zero"
+    manufacturer char[24]       "who made the disc"
+    checksum   u16              "makes the 16-bit words of this entry sum to zero"
+    keyByte1   u8               "0x55"
+    keyByte2   u8               "0xAA"
+}
+
+// The default boot entry, immediately after the validation entry.
+struct ElToritoInitialEntry {
+    bootIndicator u8                "0x88 bootable, 0x00 not bootable"
+    bootMedia     ElToritoBootMedia "what the firmware should emulate"
+    loadSegment   u16               "real-mode segment to load at; 0 means 0x7C0"
+    systemType    u8                "partition type byte, copied from the image"
+    unused        u8                "zero"
+    sectorCount   u16               "virtual 512-byte sectors to load"
+    loadRba       u32               "first sector of the boot image, in 2048-byte sectors"
+    unused2       bytes[20]         "zero"
+}
+
+struct ElToritoBootCatalog {
+    validation ElToritoValidationEntry "validation entry"
+    initial    ElToritoInitialEntry    "the default boot entry"
+}
+
+struct ElTorito {
+    skipToSector17 bytes[34816] "sectors 0-16: the system area and the primary volume descriptor"
+    type       u8       "0 for a boot record volume descriptor"
+    identifier char[5]  "CD001"
+    version    u8       "1"
+    systemId   char[32] "EL TORITO SPECIFICATION"
+    unused     bytes[32] "zero"
+    catalogSector u32   "sector holding the boot catalog"
+    unused2    bytes[1973] "zero, to the end of the sector"
+    catalogOffset = catalogSector * 2048
+    // The boot catalog, followed to its sector. Placed by pointer; 2048 is the
+    // sector size ISO 9660 discs always use.
+    catalog at catalogOffset ElToritoBootCatalog "what to boot, and how"
+}
+"""

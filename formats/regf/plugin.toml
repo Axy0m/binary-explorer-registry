@@ -1,0 +1,117 @@
+id = "regf"
+name = "Windows registry hive"
+version = "1.0.0"
+description = "Windows registry hive: the base block, the hive bin chain, and the root key cell followed to its offset."
+author = "Nybble"
+
+[[formats]]
+name = "REGF"
+extension = "hiv"
+description = "Windows registry hive (SYSTEM, SOFTWARE, NTUSER.DAT, ...)"
+confidence = 98
+entry = "Regf"
+endian = "le"
+# "regf"
+detect = [{ offset = 0, hex = "72 65 67 66" }]
+schema = """
+// Windows registry hive - the on-disk form of SYSTEM, SOFTWARE, SAM, SECURITY
+// and every NTUSER.DAT. A 4 KiB base block, then the hive bins: 4 KiB-aligned
+// containers carved into cells, which are the keys, values, subkey lists and
+// security descriptors the registry is made of.
+//
+// Offsets inside a hive are relative to the start of the bins data at 4096,
+// not to the start of the file, so reaching the root key means adding 4096 to
+// rootCellOffset. That is done below, and the root key cell is followed there.
+//
+// The two sequence numbers are how a torn write is detected. They are equal in
+// a cleanly closed hive; when they differ, the hive was being written when the
+// machine stopped and the .LOG file next to it holds the missing pages.
+//
+// A cell size is signed, and the sign is the allocation bit: negative means
+// the cell is in use and positive means it is free. Its absolute value is the
+// cell length, so a deleted key often survives intact until its space is
+// reused - which is why carving unallocated cells is standard practice in
+// registry forensics.
+
+enum RegfFileType : u32 {
+    Primary          = 0
+    TransactionLog   = 1
+    TransactionLog2  = 2
+    TransactionLog3  = 6
+}
+
+bitfield RegfKeyFlags : u16 {
+    volatile     0 // the key is not written to disk
+    hiveExit     1 // a mount point into another hive
+    hiveEntry    2 // the root of a mounted hive
+    noDelete     3
+    symlink      4 // a REG_LINK to another key
+    compName     5 // the key name is ASCII rather than UTF-16
+    predefined   6
+}
+
+// An nk cell: one registry key, with its subkey and value lists.
+struct RegfNamedKey {
+    signature        char[2]      "nk"
+    flags            RegfKeyFlags "key type and name encoding"
+    lastWritten      u64          "last write time (FILETIME)"
+    accessBits       u32          "access flags"
+    parent           u32          "offset of the parent key cell"
+    subkeyCount      u32          "stable subkeys"
+    volatileSubkeys  u32          "volatile subkeys, absent from the file"
+    subkeyList       u32          "offset of the subkey list cell"
+    volatileSubkeyList u32        "offset of the volatile subkey list"
+    valueCount       u32          "values on this key"
+    valueList        u32          "offset of the value list cell"
+    security         u32          "offset of the security descriptor cell"
+    classNameOffset  u32          "offset of the class name, or 0xFFFFFFFF"
+    maxSubkeyNameLen u32          "longest subkey name, in bytes"
+    maxSubkeyClassLen u32         "longest subkey class name"
+    maxValueNameLen  u32          "longest value name, in bytes"
+    maxValueDataLen  u32          "largest value data"
+    workVar          u32          "scratch space used at run time"
+    keyNameLength    u16          "length of the name that follows, in bytes"
+    classNameLength  u16          "length of the class name"
+    keyName          char[keyNameLength] "the key name, ASCII when compName is set"
+}
+
+// A hive bin: a 4 KiB-aligned container the cells are carved out of.
+struct RegfHbin {
+    signature char[4]  "hbin"
+    offset    u32      "offset of this bin from the start of the bins data"
+    size      u32      "size of this bin, always a multiple of 4096"
+    reserved  bytes[8] "zero"
+    timestamp u64      "last write time (FILETIME); meaningful in the first bin only"
+    spare     u32      "offset of the next bin, in some versions"
+    cellsLen  = size - 32
+    cells     bytes[cellsLen] "the cells: nk keys, vk values, sk descriptors, lists"
+}
+
+struct Regf {
+    signature        char[4]      "regf"
+    primarySequence  u32          "incremented before a write"
+    secondarySequence u32         "incremented after it; equal to the primary when clean"
+    lastWritten      u64          "last write time (FILETIME)"
+    majorVersion     u32          "1"
+    minorVersion     u32          "3 or 5 on modern Windows"
+    fileType         RegfFileType "primary hive or transaction log"
+    fileFormat       u32          "1, direct memory load"
+    rootCellOffset   u32          "offset of the root key cell, from the start of the bins"
+    hiveBinsDataSize u32          "total size of the hive bins"
+    clusteringFactor u32          "1, in units of 512 bytes"
+    fileName         char[64]     "last 31 characters of the hive path, UTF-16"
+    reserved         bytes[396]   "RmId, LogId and flags on newer versions, else zero"
+    checksum         u32          "XOR of the first 508 bytes, taken 4 bytes at a time"
+    reserved2        bytes[3576]  "zero"
+    bootType         u32          "set during boot, zero in a hive at rest"
+    bootRecover      u32          "set during boot, zero in a hive at rest"
+    rootCellPos      = rootCellOffset + 4096
+    rootKeyPos       = rootCellOffset + 4100
+    // The root key, followed to its cell. Offsets in a hive are relative to
+    // the bins data at 4096, so that is added above. The 4 bytes at the cell
+    // start are its signed size; the nk record begins right after them.
+    rootCellSize at rootCellPos i32 "cell size; negative means the cell is allocated"
+    rootKey      at rootKeyPos RegfNamedKey "the root key of this hive"
+    bins         repeat RegfHbin "every hive bin, in file order"
+}
+"""

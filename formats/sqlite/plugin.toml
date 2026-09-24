@@ -1,0 +1,173 @@
+id = "sqlite"
+name = "SQLite database"
+version = "1.0.0"
+description = "SQLite 3 database header and the b-tree page header of page 1, plus the WAL and journal sidecar files."
+author = "Nybble"
+
+[[formats]]
+name = "SQLite"
+extension = "sqlite"
+description = "SQLite 3 database file"
+confidence = 98
+entry = "Sqlite"
+endian = "be"
+# "SQLite format 3\0"
+detect = [{ offset = 0, hex = "53 51 4C 69 74 65 20 66 6F 72 6D 61 74 20 33 00" }]
+schema = """
+// SQLite 3 - a 100-byte header, then a run of fixed-size pages. Everything
+// multi-byte in the file is big-endian, including on little-endian machines.
+//
+// Page 1 is special: it carries the header in its first 100 bytes and then the
+// b-tree page header of sqlite_schema, the table that stores the CREATE
+// statements for everything else. So the b-tree header below starts at offset
+// 100, not at the start of the page.
+//
+// Two numbers are worth knowing. pageSize is stored as a u16, so 65536 could
+// not fit and is encoded as 1. cellContentOffset has the same problem and the
+// same answer. A file whose header says pageSize 1 has 64 KiB pages.
+
+enum SqliteEncoding : u32 {
+    Utf8    = 1
+    Utf16le = 2
+    Utf16be = 3
+}
+
+enum SqliteSchemaFormat : u32 {
+    Format1 = 1 // the original format
+    Format2 = 2 // usable ALTER TABLE ADD COLUMN
+    Format3 = 3 // non-NULL default values in added columns
+    Format4 = 4 // DESC indexes and the boolean/blob type affinities
+}
+
+enum SqliteVersion : u8 {
+    Legacy = 1 // rollback journal
+    Wal    = 2 // write-ahead log
+}
+
+enum SqliteBtreeType : u8 {
+    InteriorIndex = 2
+    InteriorTable = 5
+    LeafIndex     = 10
+    LeafTable     = 13
+}
+
+struct SqliteHeader {
+    magic                char[16]           "SQLite format 3, NUL-terminated"
+    pageSize             u16                "page size in bytes; 1 encodes 65536"
+    writeVersion         SqliteVersion      "write format: rollback journal or WAL"
+    readVersion          SqliteVersion      "read format"
+    reservedSpace        u8                 "bytes reserved at the end of every page"
+    maxPayloadFraction   u8                 "always 64"
+    minPayloadFraction   u8                 "always 32"
+    leafPayloadFraction  u8                 "always 32"
+    fileChangeCounter    u32                "incremented on every transaction"
+    databaseSize         u32                "size of the database in pages"
+    firstFreelistPage    u32                "page number of the first freelist trunk page"
+    freelistPageCount    u32                "pages on the freelist"
+    schemaCookie         u32                "incremented whenever the schema changes"
+    schemaFormat         SqliteSchemaFormat "schema layer file format"
+    defaultPageCacheSize u32                "suggested page cache size"
+    largestRootBtreePage u32                "non-zero only in auto-vacuum databases"
+    textEncoding         SqliteEncoding     "encoding of all text in the database"
+    userVersion          u32                "set by PRAGMA user_version; SQLite never reads it"
+    incrementalVacuum    u32                "non-zero for incremental-vacuum mode"
+    applicationId        u32                "set by PRAGMA application_id, for file(1)"
+    reserved             bytes[20]          "reserved for expansion, zero"
+    versionValidFor      u32                "the change counter that sqliteVersion belongs to"
+    sqliteVersion        u32                "SQLITE_VERSION_NUMBER of the library that last wrote"
+}
+
+// The b-tree page header. On page 1 it starts at offset 100, right after the
+// database header; on every other page it starts at offset 0.
+struct SqliteBtreePage {
+    type                SqliteBtreeType "interior or leaf, index or table"
+    firstFreeblock      u16 "offset of the first free block, 0 if there is none"
+    cellCount           u16 "cells on this page"
+    cellContentOffset   u16 "start of the cell content area; 0 encodes 65536"
+    fragmentedFreeBytes u8  "fragmented free bytes in the cell content area"
+    // Interior pages (types 2 and 5) carry a right-most child pointer; leaf
+    // pages (10 and 13) do not.
+    rightmostPointer u32 if type < 10 "page number of the right-most child"
+    cellPointers     u16[cellCount] "offsets of each cell, in key order"
+}
+
+struct Sqlite {
+    header SqliteHeader    "the 100-byte database header"
+    page1  SqliteBtreePage "b-tree header of page 1: the root of sqlite_schema"
+}
+"""
+
+[[formats]]
+name = "SQLite WAL"
+extension = "wal"
+description = "SQLite write-ahead log sidecar file"
+confidence = 90
+entry = "SqliteWal"
+endian = "be"
+# 0x377F0682 (little-endian page numbers) or 0x377F0683 (big-endian).
+detect = [{ offset = 0, hex = "37 7F 06 82" }]
+schema = """
+// The -wal sidecar SQLite writes in WAL mode: a 32-byte header, then frames,
+// each a 24-byte frame header followed by one full page image. A frame counts
+// only if its salts match the header and its checksum chain holds, so a log
+// can hold stale frames left over from an earlier checkpoint.
+//
+// Every frame is 24 + pageSize bytes, so the whole log is a flat array once
+// you know pageSize. The first frame is decoded here; the rest follow at that
+// stride.
+
+struct SqliteWalFrameHeader {
+    pageNumber  u32 "database page this frame replaces"
+    dbSizeAfter u32 "database size in pages after a commit frame, else 0"
+    salt1       u32 "copy of the header salt-1; a mismatch marks the frame stale"
+    salt2       u32 "copy of the header salt-2"
+    checksum1   u32 "running checksum over the frame header and the page"
+    checksum2   u32 "second half of the running checksum"
+}
+
+struct SqliteWal {
+    magic         u32 "0x377F0682 or 0x377F0683; the low bit gives the checksum byte order"
+    formatVersion u32 "3007000"
+    pageSize      u32 "database page size; every frame is 24 bytes longer than this"
+    checkpointSeq u32 "checkpoint sequence number"
+    salt1         u32 "random, changed on every checkpoint"
+    salt2         u32 "random, changed on every checkpoint"
+    checksum1     u32 "checksum of the first 24 bytes of this header"
+    checksum2     u32 "second half of that checksum"
+    firstFrame    SqliteWalFrameHeader "header of the first frame in the log"
+    firstPage     bytes[pageSize]      "the page image that frame carries"
+}
+"""
+
+[[formats]]
+name = "SQLite journal"
+extension = "db-journal"
+description = "SQLite rollback journal sidecar file"
+confidence = 90
+entry = "SqliteJournal"
+endian = "be"
+detect = [{ offset = 0, hex = "D9 D5 05 F9 20 A1 63 D7" }]
+schema = """
+// The -journal sidecar SQLite writes in the default rollback mode: the header
+// records what the database looked like before the transaction, and each
+// record holds one original page to put back if the transaction is rolled
+// back. A journal whose pageCount is 0xFFFFFFFF ran to the end of the file.
+//
+// The header is padded out to sectorSize before the first record, so the
+// records do not start at offset 28. Each record is 8 + pageSize bytes; the
+// first is decoded here and the rest follow at that stride.
+
+struct SqliteJournal {
+    magic        bytes[8] "D9 D5 05 F9 20 A1 63 D7"
+    pageCount    u32 "records that follow, or 0xFFFFFFFF for all of them"
+    nonce        u32 "checksum seed for the records"
+    initialSize  u32 "database size in pages before the transaction"
+    sectorSize   u32 "assumed sector size; the header is padded out to this"
+    pageSize     u32 "database page size"
+    padLen       = sectorSize - 28
+    padding      bytes[padLen] "zero padding up to the first sector boundary"
+    firstPageNumber u32 "database page the first record restores"
+    firstPage    bytes[pageSize] "that page as it was before the transaction"
+    firstChecksum u32 "checksum of the page, seeded with the nonce"
+}
+"""

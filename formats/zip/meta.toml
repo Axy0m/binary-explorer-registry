@@ -1,0 +1,5 @@
+category = "archive"
+tags = ["archive", "compression", "zip", "deflate", "jar", "apk"]
+maintainer = "Nybble"
+homepage = "https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT"
+sample = ""
