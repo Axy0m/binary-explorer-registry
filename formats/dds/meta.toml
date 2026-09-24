@@ -1,0 +1,5 @@
+category = "image"
+tags = ["image", "texture", "directx", "microsoft", "gamedev"]
+maintainer = "Nybble"
+homepage = "https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dds-header"
+sample = ""

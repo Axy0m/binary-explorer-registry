@@ -1,0 +1,33 @@
+id = "icns"
+name = "Apple icon image"
+version = "1.0.0"
+description = "Apple .icns icon family: the file header and its stream of icon elements."
+author = "Nybble"
+
+[[formats]]
+name = "ICNS"
+extension = "icns"
+description = "Apple .icns icon family: the file header and its stream of icon elements."
+confidence = 95
+entry = "Icns"
+endian = "be"
+detect = [{ offset = 0, hex = "69 63 6E 73" }]
+schema = """
+// Apple icon image (.icns) — big-endian. An 8-byte header followed by a flat
+// stream of icon elements, each one an 8-byte header plus its payload. The
+// element type names both the size and the encoding: 'ic07'..'ic14' hold whole
+// PNG or JPEG 2000 files, 'is32'/'il32' hold raw RLE-packed RGB, 's8mk'/'l8mk'
+// hold 8-bit alpha masks, and 'TOC ' is an optional table of contents.
+struct IcnsElement {
+    type    char[4]       "element type: icon size and encoding, or 'TOC '"
+    size    u32           "element size in bytes, this 8-byte header included"
+    dataLen = size - 8
+    data    bytes[dataLen] "the icon image, mask, or table of contents"
+}
+
+struct Icns {
+    magic    char[4] "magic 'icns'"
+    fileSize u32     "total file size in bytes, this header included"
+    elements repeat IcnsElement "the icon family, one element per size and depth"
+}
+"""

@@ -1,0 +1,135 @@
+id = "dds"
+name = "DDS texture"
+version = "1.0.0"
+description = "DirectDraw Surface texture: the 124-byte header, its pixel format, and the DX10 extension."
+author = "Nybble"
+
+[[formats]]
+name = "DDS"
+extension = "dds"
+description = "DirectDraw Surface texture: the 124-byte header, its pixel format, and the DX10 extension."
+confidence = 95
+entry = "Dds"
+endian = "le"
+detect = [{ offset = 0, hex = "44 44 53 20" }]
+schema = """
+// DDS (DirectDraw Surface) — little-endian. A four-byte magic, a fixed 124-byte
+// DDS_HEADER with a nested DDS_PIXELFORMAT, then the surface data. When the
+// pixel format's FourCC is 'DX10' a second, 20-byte header precedes that data.
+
+// Which DDS_HEADER fields carry a meaningful value. Caps, height, width,
+// pixelFormat are required; the rest describe what the file happens to hold.
+bitfield DdsHeaderFlags : u32 {
+    caps        0  // required
+    height      1  // required
+    width       2  // required
+    pitch       3  // pitchOrLinearSize holds a row pitch (uncompressed)
+    pixelFormat 12 // required
+    mipMapCount 17 // the file stores a mipmap chain
+    linearSize  19 // pitchOrLinearSize holds a total size (block compressed)
+    depth       23 // the surface is a volume texture
+}
+
+bitfield DdsPixelFormatFlags : u32 {
+    alphaPixels 0  // the surface has per-pixel alpha, described by aBitMask
+    alpha       1  // alpha-only surface: rgbBitCount and aBitMask apply
+    fourCC      2  // compressed: the encoding is named by fourCC
+    rgb         6  // uncompressed RGB: the channel masks apply
+    yuv         9  // uncompressed YUV, packed in the RGB masks
+    luminance   17 // single-channel luminance, in rBitMask
+}
+
+bitfield DdsCaps : u32 {
+    complex 3  // the file holds more than one surface (mipmaps, cube, volume)
+    texture 12 // required on every DDS file
+    mipmap  22 // this surface is part of a mipmap chain
+}
+
+bitfield DdsCaps2 : u32 {
+    cubemap          9  // the file is a cube map
+    cubemapPositiveX 10
+    cubemapNegativeX 11
+    cubemapPositiveY 12
+    cubemapNegativeY 13
+    cubemapPositiveZ 14
+    cubemapNegativeZ 15
+    volume           21 // the file is a volume (3D) texture
+}
+
+// The DXGI formats a DX10-extended DDS commonly carries; the full enumeration
+// runs past 130 entries.
+enum DxgiFormat : u32 {
+    Unknown           = 0
+    R32G32B32A32Float = 2
+    R16G16B16A16Float = 10
+    R8G8B8A8Unorm     = 28
+    R8G8B8A8UnormSrgb = 29
+    R16Float          = 54
+    R8Unorm           = 61
+    Bc1Unorm          = 71
+    Bc1UnormSrgb      = 72
+    Bc2Unorm          = 74
+    Bc2UnormSrgb      = 75
+    Bc3Unorm          = 77
+    Bc3UnormSrgb      = 78
+    Bc4Unorm          = 80
+    Bc5Unorm          = 83
+    B8G8R8A8Unorm     = 87
+    B8G8R8A8UnormSrgb = 91
+    Bc6hUf16          = 95
+    Bc7Unorm          = 98
+    Bc7UnormSrgb      = 99
+}
+
+enum DdsResourceDimension : u32 {
+    Texture1D = 2
+    Texture2D = 3
+    Texture3D = 4
+}
+
+// The DX10 extension header, present only when fourCC is 'DX10'.
+struct DdsHeaderDxt10 {
+    dxgiFormat        DxgiFormat           "the surface format, in DXGI terms"
+    resourceDimension DdsResourceDimension "1D, 2D or 3D resource"
+    miscFlag          u32                  "bit 2 marks a cube map"
+    arraySize         u32                  "number of elements in the texture array"
+    miscFlags2        u32                  "alpha mode: 0 unknown, 1 straight, 2 premultiplied, 3 opaque"
+}
+
+struct DdsPixelFormat {
+    size        u32                  "size of this block in bytes, always 32"
+    flags       DdsPixelFormatFlags  "which of the fields below are meaningful"
+    fourCC      char[4]              "compression FourCC (DXT1..DXT5, DX10, ATI2, ...) when the fourCC flag is set"
+    rgbBitCount u32                  "bits per pixel for an uncompressed surface"
+    rBitMask    u32                  "red channel mask"
+    gBitMask    u32                  "green channel mask"
+    bBitMask    u32                  "blue channel mask"
+    aBitMask    u32                  "alpha channel mask"
+    // The DX10 header sits just past the 124-byte DDS_HEADER. This block starts
+    // at file offset 76, so that is +52 from here. Placed by pointer, so it
+    // reads no bytes of its own and the fixed header layout stays exact.
+    dx10 at +52 match fourCC {
+        "DX10"  => DdsHeaderDxt10
+        default => bytes[0]
+    }
+}
+
+struct Dds {
+    magic             char[4]        "magic 'DDS '"
+    size              u32            "size of the header that follows, always 124"
+    flags             DdsHeaderFlags "which header fields carry a meaningful value"
+    height            u32            "surface height in pixels"
+    width             u32            "surface width in pixels"
+    pitchOrLinearSize u32            "row pitch, or the total size of the top-level surface"
+    depth             u32            "depth of a volume texture, in pixels"
+    mipMapCount       u32            "number of mipmap levels"
+    reserved1         bytes[44]      "reserved; some tools stash a writer signature here"
+    pixelFormat       DdsPixelFormat "how each pixel is encoded"
+    caps              DdsCaps        "surface complexity flags"
+    caps2             DdsCaps2       "cube map and volume texture flags"
+    caps3             u32            "unused, zero"
+    caps4             u32            "unused, zero"
+    reserved2         u32            "reserved, zero"
+    surface           bytes[*]       "the surface data: mip chain, cube faces or volume slices"
+}
+"""

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "count": 56,
+  "count": 58,
   "formats": [
     {
       "id": "7z",
@@ -161,6 +161,30 @@
         }
       ],
       "path": "formats/cab/plugin.toml"
+    },
+    {
+      "id": "dds",
+      "name": "DDS texture",
+      "version": "1.0.0",
+      "description": "DirectDraw Surface texture: the 124-byte header, its pixel format, and the DX10 extension.",
+      "author": "Nybble",
+      "category": "image",
+      "tags": [
+        "image",
+        "texture",
+        "directx",
+        "microsoft",
+        "gamedev"
+      ],
+      "formats": [
+        {
+          "name": "DDS",
+          "extension": "dds",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/dds/plugin.toml"
     },
     {
       "id": "dex",
@@ -476,6 +500,29 @@
         }
       ],
       "path": "formats/gzip/plugin.toml"
+    },
+    {
+      "id": "icns",
+      "name": "Apple icon image",
+      "version": "1.0.0",
+      "description": "Apple .icns icon family: the file header and its stream of icon elements.",
+      "author": "Nybble",
+      "category": "image",
+      "tags": [
+        "image",
+        "icon",
+        "apple",
+        "macos"
+      ],
+      "formats": [
+        {
+          "name": "ICNS",
+          "extension": "icns",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/icns/plugin.toml"
     },
     {
       "id": "ico",
