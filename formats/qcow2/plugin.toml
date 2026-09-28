@@ -1,0 +1,86 @@
+id = "qcow2"
+name = "QCOW2 disk image"
+version = "1.0.0"
+description = "QEMU copy-on-write v2/v3 image header: cluster size, the two-level L1/L2 map, refcounts and feature bits."
+author = "Nybble"
+
+[[formats]]
+name = "QCOW2"
+extension = "qcow2"
+description = "QEMU copy-on-write disk image, version 2 or 3"
+confidence = 97
+entry = "Qcow2"
+endian = "be"
+detect = [{ offset = 0, hex = "51 46 49 FB" }]
+schema = """
+// QCOW2 - QEMU's copy-on-write disk image, and the format behind most Linux
+// virtual machine disks. Big-endian throughout, which is unusual for a format
+// that almost only ever runs on little-endian hardware.
+//
+// The guest disk is divided into clusters (65536 bytes by default) and mapped
+// through two levels of tables: an L1 table, whose entries point at L2 tables,
+// whose entries point at the clusters holding the data. An unallocated entry is
+// zero, which is what makes a sparse image small: only written clusters exist.
+//
+// A second structure, the refcount table, counts references to each cluster.
+// That is what internal snapshots are built on - a snapshot bumps the count on
+// every cluster it shares, and a write to a cluster with a count above one
+// copies it first.
+//
+// backingFileOffset points at a path string elsewhere in the image. When set,
+// this image holds only the differences from that file, which is how a chain of
+// images built on one base disk works.
+//
+// Version 3 added the three feature words below. The rule is what makes them
+// useful: a reader that does not understand an incompatible bit must refuse the
+// image, one that does not understand a compatible bit may proceed, and an
+// autoclear bit it does not understand must be cleared on write.
+
+enum Qcow2CryptMethod : u32 {
+    NoEncryption = 0
+    Aes          = 1 // the old, broken AES-CBC scheme; qemu will not create it
+    Luks         = 2 // LUKS, with the key material stored in the image
+}
+
+bitfield Qcow2IncompatibleFeatures : u64 {
+    dirty       0 // the refcounts may be wrong; the image needs a repair pass
+    corrupt     1 // the image is known corrupt and must not be written
+    externalData 2 // guest data lives in an external file, not in this one
+    compressionType 3 // a compression type other than zlib is in use
+    extendedL2  4 // L2 entries are 128-bit and carry subcluster bitmaps
+}
+
+bitfield Qcow2CompatibleFeatures : u64 {
+    lazyRefcounts 0 // refcounts are only flushed on clean shutdown
+}
+
+bitfield Qcow2AutoclearFeatures : u64 {
+    bitmaps      0 // the image carries persistent dirty bitmaps
+    rawExternalData 1 // the external data file can be read as a raw image
+}
+
+struct Qcow2 {
+    magic              bytes[4]          "51 46 49 FB, the ASCII QFI followed by 0xFB"
+    version            u32               "2 or 3"
+    backingFileOffset  u64               "offset of the backing file path string, 0 if this image stands alone"
+    backingFileSize    u32               "length of that path in bytes, no terminator"
+    clusterBits        u32               "cluster size as a power of two; 16 means 65536 bytes"
+    size               u64               "virtual disk size the guest sees, in bytes"
+    cryptMethod        Qcow2CryptMethod  "how guest data is encrypted"
+    l1Size             u32               "entries in the L1 table"
+    l1TableOffset      u64               "offset of the L1 table; cluster aligned"
+    refcountTableOffset u64              "offset of the refcount table; cluster aligned"
+    refcountTableClusters u32            "clusters occupied by the refcount table"
+    nbSnapshots        u32               "number of internal snapshots"
+    snapshotsOffset    u64               "offset of the snapshot table"
+    incompatibleFeatures Qcow2IncompatibleFeatures if version >= 3 "bits a reader must understand or refuse the image"
+    compatibleFeatures Qcow2CompatibleFeatures    if version >= 3 "bits a reader may safely ignore"
+    autoclearFeatures  Qcow2AutoclearFeatures     if version >= 3 "bits a writer must clear if it does not understand them"
+    refcountOrder      u32 if version >= 3 "refcount width as a power of two; 4 means 16-bit refcounts"
+    headerLength       u32 if version >= 3 "bytes of header, 104 or more; extensions follow it"
+    // Header extensions start at headerLength and are typed records: a 32-bit
+    // magic, a 32-bit length, then the payload. They carry the backing file
+    // format string, feature name table, and encryption header pointer.
+    l1Table at l1TableOffset u64[l1Size] "the L1 table: each entry points at an L2 table, 0 when nothing below it is allocated"
+}
+"""

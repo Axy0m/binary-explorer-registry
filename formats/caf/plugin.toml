@@ -1,0 +1,91 @@
+id = "caf"
+name = "CAF audio"
+version = "1.0.0"
+description = "Apple Core Audio Format: file header plus a walk of every chunk, decoding desc, pakt, data and info."
+author = "Nybble"
+
+[[formats]]
+name = "CAF"
+extension = "caf"
+description = "Apple Core Audio Format container"
+confidence = 95
+entry = "Caf"
+endian = "be"
+detect = [{ offset = 0, hex = "63 61 66 66 00 01" }]
+schema = """
+// Core Audio Format - Apple's replacement for AIFF and WAV, designed to lift
+// their limits: sizes are 64-bit signed, so a file is not capped at 4 GB, and
+// the sample rate is a double rather than a fixed-point value.
+//
+// The layout is the familiar chunked one: an 8-byte file header, then chunks of
+// a four-character type and a 64-bit size. The Audio Description chunk (desc)
+// must come first and is always 32 bytes; everything else may appear in any
+// order.
+//
+// One wrinkle worth knowing: the data chunk's size may be -1, meaning it runs
+// to the end of the file. That is only legal for the last chunk, and is what a
+// recorder writes while it is still capturing.
+
+bitfield CafFormatFlags : u32 {
+    isFloat      0 // samples are floating point rather than integer
+    isLittleEndian 1 // samples are little-endian (the format itself stays big-endian)
+}
+
+// desc - the Audio Description chunk. Always present, always first, always 32
+// bytes. A frame is one sample across all channels; a packet is the codec's
+// unit, equal to one frame for uncompressed audio.
+struct CafAudioDescription {
+    sampleRate      f64             "frames per second, as a double (44100.0, 48000.0)"
+    formatId        char[4]         "codec: lpcm, aac , alac, ima4, ulaw, alaw"
+    formatFlags     CafFormatFlags  "codec-specific flags; for lpcm, the sample layout"
+    bytesPerPacket  u32             "bytes in one packet, 0 when packets vary in size"
+    framesPerPacket u32             "frames in one packet, 0 when that varies too"
+    channelsPerFrame u32            "channel count (1 mono, 2 stereo)"
+    bitsPerChannel  u32             "bits per sample in one channel, 0 for compressed audio"
+}
+
+// pakt - the packet table, needed to seek in variable-bit-rate audio. The
+// per-packet sizes that follow are variable-length integers, so only the
+// counts are decoded here.
+struct CafPacketTable {
+    numberPackets     i64 "packets in the data chunk"
+    numberValidFrames i64 "frames of real audio, excluding codec priming and padding"
+    primingFrames     i32 "frames the decoder must run before the output is valid"
+    remainderFrames   i32 "frames of padding at the end of the last packet"
+}
+
+// data - the audio itself, prefixed by an edit count.
+struct CafData {
+    editCount u32 "bumped every time the audio is edited; 0 in a fresh file"
+}
+
+// info - free-form metadata as a run of NUL-terminated key/value strings.
+struct CafInfo {
+    numEntries u32 "number of key/value string pairs that follow"
+}
+
+// free - padding a writer leaves so metadata can grow without rewriting the
+// file. Nothing to decode; the size is the point.
+
+struct CafChunk {
+    type char[4]      "four-character chunk type"
+    size i64          "bytes of chunk data; -1 on the last chunk means to end of file"
+    data bytes[size]  "chunk data"
+    // Typed view of the data, placed by pointer so it reads no bytes of its own
+    // and the walk above stays exact whatever the type turns out to be.
+    decoded at +12 match type {
+        "desc" => CafAudioDescription
+        "pakt" => CafPacketTable
+        "data" => CafData
+        "info" => CafInfo
+        default => bytes[0]
+    }
+}
+
+struct Caf {
+    fileType    char[4]        "caff"
+    fileVersion u16            "format version, 1"
+    fileFlags   u16            "no flags are defined for version 1; always 0"
+    chunks      repeat CafChunk "every chunk in order, desc first"
+}
+"""

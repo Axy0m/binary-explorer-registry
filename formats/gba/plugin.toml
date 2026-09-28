@@ -1,0 +1,54 @@
+id = "gba"
+name = "Game Boy Advance ROM"
+version = "1.0.0"
+description = "GBA cartridge header: entry branch, Nintendo logo, game and maker codes, and the header checksum."
+author = "Nybble"
+
+[[formats]]
+name = "GBA"
+extension = "gba"
+description = "Game Boy Advance cartridge ROM"
+confidence = 90
+entry = "GbaRom"
+endian = "le"
+# The first eight bytes of the compressed Nintendo logo at offset 4. The BIOS
+# compares all 156 bytes of it against its own copy and refuses to boot on a
+# mismatch, so these bytes are identical in every commercial cartridge.
+detect = [{ offset = 4, hex = "24 FF AE 51 69 9A A2 21" }]
+schema = """
+// The Game Boy Advance cartridge header - 192 bytes at the start of the ROM,
+// mapped by the console at 0x08000000. It is a good example of a header used as
+// a lock: the BIOS checks the Nintendo logo and the header checksum before it
+// will run the cartridge, so both had to be exactly right for a game to boot on
+// real hardware.
+//
+// The first field is an ARM branch instruction rather than an address. The BIOS
+// jumps to 0x08000000, executes it, and lands at the game's real entry point.
+// A multiboot image - code sent to a second console over the link cable - has a
+// second such branch at offset 0xC0.
+//
+// The game code is structured: U or A for the type, two characters of short
+// title, then the region - E North America, J Japan, P Europe, D Germany,
+// F France, S Spain, I Italy. That is the code printed on the cartridge label,
+// and what a ROM database looks a game up by.
+//
+// headerChecksum is the one field a ROM hacker has to recompute: it is the
+// 8-bit sum of the bytes from 0xA0 to 0xBC, negated, minus 0x19.
+
+struct GbaRom {
+    entryPoint    u32       "an ARM branch instruction to the real entry point, not an address"
+    nintendoLogo  bytes[156] "the compressed Nintendo logo; the BIOS refuses to boot if a byte differs"
+    gameTitle     string[12] "game title, uppercase ASCII, NUL-padded"
+    gameCode      string[4]  "type, two title characters, then the region letter"
+    makerCode     string[2]  "publisher code; 01 is Nintendo"
+    fixed         u8         "must be 0x96"
+    mainUnitCode  u8         "hardware the cartridge is for; 0 is a retail GBA"
+    deviceType    u8         "0 normally, 0x80 for a debugging cartridge with more RAM"
+    reserved      bytes[7]   "reserved, zero"
+    softwareVersion u8       "game version, counting from 0"
+    headerChecksum u8        "8-bit checksum over the bytes from gameTitle to reserved2"
+    reserved2     bytes[2]   "reserved, zero"
+    // A multiboot image continues with a second entry branch at 0xC0, a boot
+    // mode byte and a slave id; a normal cartridge starts its code here.
+}
+"""

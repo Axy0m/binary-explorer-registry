@@ -1,0 +1,53 @@
+id = "ar"
+name = "Unix ar archive"
+version = "1.0.0"
+description = "Unix ar archive: the global magic and the first member header, with its ASCII decimal fields."
+author = "Nybble"
+
+[[formats]]
+name = "AR"
+extension = "a"
+description = "Unix ar archive (static library, Debian .deb container)"
+confidence = 90
+entry = "ArArchive"
+endian = "le"
+detect = [{ offset = 0, hex = "21 3C 61 72 63 68 3E 0A" }]
+schema = """
+// ar - the oldest archive format still in daily use. A static library (.a) is
+// one, and so is a Debian package: a .deb is an ar archive of exactly three
+// members, debian-binary, control.tar.* and data.tar.*, in that order.
+//
+// The structure is deliberately plain text. An 8-byte global magic, then each
+// member is a 60-byte header of space-padded ASCII fields followed by the file
+// contents, padded with a newline to an even offset. There is no index of
+// members and no compression; the archive is walked by adding up sizes.
+//
+// Because every length is ASCII decimal rather than a number, a declarative
+// walk cannot use one to size the next field - so this pack decodes the global
+// magic and the first member header, which is where the interesting part is
+// anyway. For a .deb that first member is debian-binary, whose four bytes of
+// contents are the package format version.
+//
+// Long names are handled differently by each variant, and the name field tells
+// you which you have:
+//   name/            System V: a real name, terminated by a slash
+//   /123             System V: the name is at offset 123 of the // string table
+//   //               System V: this member is the string table
+//   /                System V: this member is the symbol index
+//   __.SYMDEF        BSD and macOS: the symbol index
+//   #1/20            BSD: the name is the first 20 bytes of the contents
+struct ArMemberHeader {
+    name      string[16] "member name, space padded; see the variants above"
+    mtime     string[12] "modification time, decimal seconds since the epoch"
+    uid       string[6]  "owner user id, decimal"
+    gid       string[6]  "owner group id, decimal"
+    mode      string[8]  "file mode, octal"
+    size      string[10] "member size in bytes, decimal, not counting this header or the padding byte"
+    terminator bytes[2]  "60 0A, the backtick-newline that ends every header"
+}
+
+struct ArArchive {
+    magic  string[8]       "!<arch> followed by a newline"
+    first  ArMemberHeader  "header of the first member; for a .deb, debian-binary"
+}
+"""

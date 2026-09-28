@@ -1,0 +1,63 @@
+id = "openexr"
+name = "OpenEXR image"
+version = "1.0.0"
+description = "OpenEXR magic and version flags, then a walk of every header attribute by name, type and size."
+author = "Nybble"
+
+[[formats]]
+name = "EXR"
+extension = "exr"
+description = "OpenEXR high dynamic range image"
+confidence = 96
+entry = "Exr"
+endian = "le"
+detect = [{ offset = 0, hex = "76 2F 31 01" }]
+schema = """
+// OpenEXR - Industrial Light and Magic's high dynamic range image format, and
+// the reason film and VFX work can keep sixteen stops of exposure in a file.
+// Little-endian throughout, which is unusual for an image format.
+//
+// The header is self-describing: attributes are written as name, type name,
+// size, value, and a reader skips what it does not recognise. The run ends at
+// an attribute whose name is empty - a single NUL byte. Because the names are
+// variable-length, attribute values are left as bytes here; their meaning is in
+// the type name next to each one.
+//
+// The attributes a file must carry are channels (a chlist naming each channel
+// and its pixel type), compression, dataWindow and displayWindow (box2i),
+// lineOrder, pixelAspectRatio, screenWindowCenter and screenWindowWidth. A
+// multipart file repeats the whole header once per part.
+//
+// After the header comes the offset table - one 64-bit file offset per scan
+// line block or tile - and then the pixel data itself, which is compressed.
+
+bitfield ExrVersion : u32 {
+    version   0..7 // format version, currently 2
+    tiled     9    // pixels are stored as tiles rather than scan lines
+    longNames 10   // attribute and channel names may exceed 31 characters
+    nonImage  11   // deep data: a variable number of samples per pixel
+    multiPart 12   // the file holds more than one part, each with its own header
+}
+
+// One header attribute: its name, the name of its type, and its value. Both
+// names are NUL-terminated, so nothing here is at a fixed offset.
+//
+// The end of the header is a single NUL where the next name would start. It is
+// read first, by pointer, so the terminator costs exactly one byte and the walk
+// does not go looking for a type and a size that are not there.
+struct ExrAttribute {
+    firstByte at +0 u8  "first byte of the name; 0 here ends the header"
+    name  cstring       "attribute name, NUL-terminated"
+    type  cstring       if firstByte > 0 "type name: box2i, chlist, compression, float, v2f, string, ..."
+    size  u32           if firstByte > 0 "bytes of value that follow"
+    value bytes[size]   if firstByte > 0 "the value, laid out as its type dictates"
+}
+
+struct Exr {
+    magic      bytes[4]            "76 2F 31 01, the OpenEXR magic"
+    version    ExrVersion          "version number in the low byte, feature flags above it"
+    attributes repeat ExrAttribute until firstByte == 0 "header attributes, ending at the single NUL that closes the header"
+    // The offset table follows - one 64-bit file offset per scan line block or
+    // tile - and then the compressed pixel data.
+}
+"""

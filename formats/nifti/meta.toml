@@ -1,0 +1,5 @@
+category = "image"
+tags = ["image", "medical", "neuroimaging", "volume", "science"]
+maintainer = "Nybble"
+homepage = "https://nifti.nimh.nih.gov/nifti-1/documentation/nifti1fields"
+sample = ""

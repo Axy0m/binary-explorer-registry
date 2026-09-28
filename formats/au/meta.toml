@@ -1,0 +1,5 @@
+category = "audio"
+tags = ["audio", "unix", "pcm", "telephony", "next"]
+maintainer = "Nybble"
+homepage = "https://en.wikipedia.org/wiki/Au_file_format"
+sample = ""

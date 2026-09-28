@@ -1,0 +1,5 @@
+category = "model"
+tags = ["model", "3d", "usd", "pixar", "scene", "vfx"]
+maintainer = "Nybble"
+homepage = "https://openusd.org/release/glossary.html#crate-file-format"
+sample = ""

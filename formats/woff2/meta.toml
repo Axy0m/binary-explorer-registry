@@ -1,0 +1,5 @@
+category = "font"
+tags = ["font", "woff", "web", "typography", "sfnt", "brotli", "compression"]
+maintainer = "Nybble"
+homepage = "https://www.w3.org/TR/WOFF2/"
+sample = ""

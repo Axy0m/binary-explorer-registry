@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "count": 58,
+  "count": 79,
   "formats": [
     {
       "id": "7z",
@@ -70,6 +70,55 @@
         }
       ],
       "path": "formats/androidboot/plugin.toml"
+    },
+    {
+      "id": "ar",
+      "name": "Unix ar archive",
+      "version": "1.0.0",
+      "description": "Unix ar archive: the global magic and the first member header, with its ASCII decimal fields.",
+      "author": "Nybble",
+      "category": "archive",
+      "tags": [
+        "archive",
+        "unix",
+        "linux",
+        "static-library",
+        "deb",
+        "package"
+      ],
+      "formats": [
+        {
+          "name": "AR",
+          "extension": "a",
+          "detects": true,
+          "confidence": 90
+        }
+      ],
+      "path": "formats/ar/plugin.toml"
+    },
+    {
+      "id": "au",
+      "name": "Sun AU audio",
+      "version": "1.0.0",
+      "description": "NeXT/Sun .au audio header: encoding, sample rate, channels and the annotation field.",
+      "author": "Nybble",
+      "category": "audio",
+      "tags": [
+        "audio",
+        "unix",
+        "pcm",
+        "telephony",
+        "next"
+      ],
+      "formats": [
+        {
+          "name": "AU",
+          "extension": "au",
+          "detects": true,
+          "confidence": 92
+        }
+      ],
+      "path": "formats/au/plugin.toml"
     },
     {
       "id": "avi",
@@ -163,6 +212,82 @@
       "path": "formats/cab/plugin.toml"
     },
     {
+      "id": "caf",
+      "name": "CAF audio",
+      "version": "1.0.0",
+      "description": "Apple Core Audio Format: file header plus a walk of every chunk, decoding desc, pakt, data and info.",
+      "author": "Nybble",
+      "category": "audio",
+      "tags": [
+        "audio",
+        "apple",
+        "macos",
+        "ios",
+        "chunked",
+        "container"
+      ],
+      "formats": [
+        {
+          "name": "CAF",
+          "extension": "caf",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/caf/plugin.toml"
+    },
+    {
+      "id": "cfb",
+      "name": "Compound File Binary",
+      "version": "1.0.0",
+      "description": "OLE2 / Compound File Binary header: sector sizes, the FAT and DIFAT chains, and the first directory sector.",
+      "author": "Nybble",
+      "category": "archive",
+      "tags": [
+        "archive",
+        "container",
+        "microsoft",
+        "ole",
+        "windows",
+        "office",
+        "forensics"
+      ],
+      "formats": [
+        {
+          "name": "CFB",
+          "extension": "doc",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/cfb/plugin.toml"
+    },
+    {
+      "id": "crx",
+      "name": "Chrome extension",
+      "version": "1.0.0",
+      "description": "Chrome extension package (CRX2 and CRX3): the signed header that precedes the zip.",
+      "author": "Nybble",
+      "category": "archive",
+      "tags": [
+        "archive",
+        "zip",
+        "chrome",
+        "extension",
+        "web",
+        "signature"
+      ],
+      "formats": [
+        {
+          "name": "CRX",
+          "extension": "crx",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/crx/plugin.toml"
+    },
+    {
       "id": "dds",
       "name": "DDS texture",
       "version": "1.0.0",
@@ -208,6 +333,30 @@
         }
       ],
       "path": "formats/dex/plugin.toml"
+    },
+    {
+      "id": "dicom",
+      "name": "DICOM image",
+      "version": "1.0.0",
+      "description": "DICOM Part 10 file: the 128-byte preamble, the DICM magic, and the file meta group element by element.",
+      "author": "Nybble",
+      "category": "image",
+      "tags": [
+        "image",
+        "medical",
+        "dicom",
+        "healthcare",
+        "imaging"
+      ],
+      "formats": [
+        {
+          "name": "DICOM",
+          "extension": "dcm",
+          "detects": true,
+          "confidence": 97
+        }
+      ],
+      "path": "formats/dicom/plugin.toml"
     },
     {
       "id": "dtb",
@@ -410,6 +559,33 @@
       "path": "formats/gameboy/plugin.toml"
     },
     {
+      "id": "gba",
+      "name": "Game Boy Advance ROM",
+      "version": "1.0.0",
+      "description": "GBA cartridge header: entry branch, Nintendo logo, game and maker codes, and the header checksum.",
+      "author": "Nybble",
+      "category": "game",
+      "tags": [
+        "game",
+        "rom",
+        "cartridge",
+        "nintendo",
+        "gba",
+        "arm",
+        "emulation",
+        "retro"
+      ],
+      "formats": [
+        {
+          "name": "GBA",
+          "extension": "gba",
+          "detects": true,
+          "confidence": 90
+        }
+      ],
+      "path": "formats/gba/plugin.toml"
+    },
+    {
       "id": "gif",
       "name": "GIF image",
       "version": "1.0.0",
@@ -500,6 +676,32 @@
         }
       ],
       "path": "formats/gzip/plugin.toml"
+    },
+    {
+      "id": "hfsplus",
+      "name": "HFS+ volume header",
+      "version": "1.0.0",
+      "description": "HFS+ / HFSX volume header at offset 1024: block counts, timestamps and the five special file forks.",
+      "author": "Nybble",
+      "category": "filesystem",
+      "tags": [
+        "filesystem",
+        "apple",
+        "macos",
+        "hfs",
+        "btree",
+        "disk",
+        "forensics"
+      ],
+      "formats": [
+        {
+          "name": "HFS+",
+          "extension": "dmg",
+          "detects": true,
+          "confidence": 88
+        }
+      ],
+      "path": "formats/hfsplus/plugin.toml"
     },
     {
       "id": "icns",
@@ -622,6 +824,56 @@
         }
       ],
       "path": "formats/jpeg/plugin.toml"
+    },
+    {
+      "id": "jpegxl",
+      "name": "JPEG XL image",
+      "version": "1.0.0",
+      "description": "JPEG XL container: the signature box and a walk of every box, decoding ftyp, jxll, jxlp and brob.",
+      "author": "Nybble",
+      "category": "image",
+      "tags": [
+        "image",
+        "jpeg-xl",
+        "isobmff",
+        "raster",
+        "compression",
+        "web"
+      ],
+      "formats": [
+        {
+          "name": "JXL",
+          "extension": "jxl",
+          "detects": true,
+          "confidence": 96
+        }
+      ],
+      "path": "formats/jpegxl/plugin.toml"
+    },
+    {
+      "id": "las",
+      "name": "LAS point cloud",
+      "version": "1.0.0",
+      "description": "ASPRS LAS public header block: point format, scaling, bounding box and the 1.3 / 1.4 additions.",
+      "author": "Nybble",
+      "category": "model",
+      "tags": [
+        "model",
+        "3d",
+        "lidar",
+        "point-cloud",
+        "geospatial",
+        "science"
+      ],
+      "formats": [
+        {
+          "name": "LAS",
+          "extension": "las",
+          "detects": true,
+          "confidence": 93
+        }
+      ],
+      "path": "formats/las/plugin.toml"
     },
     {
       "id": "lnk",
@@ -752,6 +1004,29 @@
       "path": "formats/mbr/plugin.toml"
     },
     {
+      "id": "midi",
+      "name": "MIDI file",
+      "version": "1.0.0",
+      "description": "Standard MIDI File: the MThd header chunk and every MTrk track chunk.",
+      "author": "Nybble",
+      "category": "audio",
+      "tags": [
+        "audio",
+        "midi",
+        "music",
+        "chunked"
+      ],
+      "formats": [
+        {
+          "name": "MIDI",
+          "extension": "mid",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/midi/plugin.toml"
+    },
+    {
       "id": "minidump",
       "name": "Windows minidump",
       "version": "1.0.0",
@@ -826,6 +1101,59 @@
       "path": "formats/mp4/plugin.toml"
     },
     {
+      "id": "msf",
+      "name": "PDB debug database",
+      "version": "1.0.0",
+      "description": "Microsoft PDB / MSF 7.0 superblock: block size, the free block maps and where the stream directory lives.",
+      "author": "Nybble",
+      "category": "system",
+      "tags": [
+        "system",
+        "windows",
+        "microsoft",
+        "debugging",
+        "symbols",
+        "pdb",
+        "executable"
+      ],
+      "formats": [
+        {
+          "name": "PDB",
+          "extension": "pdb",
+          "detects": true,
+          "confidence": 96
+        }
+      ],
+      "path": "formats/msf/plugin.toml"
+    },
+    {
+      "id": "n64",
+      "name": "Nintendo 64 ROM",
+      "version": "1.0.0",
+      "description": "Nintendo 64 cartridge header: clock rate, boot address, the two CIC check codes and the cartridge id.",
+      "author": "Nybble",
+      "category": "game",
+      "tags": [
+        "game",
+        "rom",
+        "cartridge",
+        "nintendo",
+        "n64",
+        "mips",
+        "emulation",
+        "retro"
+      ],
+      "formats": [
+        {
+          "name": "N64",
+          "extension": "z64",
+          "detects": true,
+          "confidence": 90
+        }
+      ],
+      "path": "formats/n64/plugin.toml"
+    },
+    {
       "id": "nes",
       "name": "NES ROM",
       "version": "1.0.0",
@@ -849,6 +1177,30 @@
         }
       ],
       "path": "formats/nes/plugin.toml"
+    },
+    {
+      "id": "nifti",
+      "name": "NIfTI-1 image",
+      "version": "1.0.0",
+      "description": "NIfTI-1 348-byte header: dimensions, data type, scaling and both spatial transforms.",
+      "author": "Nybble",
+      "category": "image",
+      "tags": [
+        "image",
+        "medical",
+        "neuroimaging",
+        "volume",
+        "science"
+      ],
+      "formats": [
+        {
+          "name": "NIfTI",
+          "extension": "nii",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/nifti/plugin.toml"
     },
     {
       "id": "ntfs",
@@ -899,6 +1251,30 @@
         }
       ],
       "path": "formats/ogg/plugin.toml"
+    },
+    {
+      "id": "openexr",
+      "name": "OpenEXR image",
+      "version": "1.0.0",
+      "description": "OpenEXR magic and version flags, then a walk of every header attribute by name, type and size.",
+      "author": "Nybble",
+      "category": "image",
+      "tags": [
+        "image",
+        "hdr",
+        "vfx",
+        "raster",
+        "film"
+      ],
+      "formats": [
+        {
+          "name": "EXR",
+          "extension": "exr",
+          "detects": true,
+          "confidence": 96
+        }
+      ],
+      "path": "formats/openexr/plugin.toml"
     },
     {
       "id": "pcap",
@@ -996,6 +1372,31 @@
       "path": "formats/png/plugin.toml"
     },
     {
+      "id": "prefetch",
+      "name": "Windows Prefetch",
+      "version": "1.0.0",
+      "description": "Windows Prefetch (SCCA) header and the version-specific file information block: last run times and run count.",
+      "author": "Nybble",
+      "category": "system",
+      "tags": [
+        "system",
+        "windows",
+        "forensics",
+        "dfir",
+        "execution",
+        "malware"
+      ],
+      "formats": [
+        {
+          "name": "Prefetch",
+          "extension": "pf",
+          "detects": true,
+          "confidence": 94
+        }
+      ],
+      "path": "formats/prefetch/plugin.toml"
+    },
+    {
       "id": "psd",
       "name": "Photoshop document",
       "version": "1.0.0",
@@ -1018,6 +1419,32 @@
         }
       ],
       "path": "formats/psd/plugin.toml"
+    },
+    {
+      "id": "qcow2",
+      "name": "QCOW2 disk image",
+      "version": "1.0.0",
+      "description": "QEMU copy-on-write v2/v3 image header: cluster size, the two-level L1/L2 map, refcounts and feature bits.",
+      "author": "Nybble",
+      "category": "filesystem",
+      "tags": [
+        "filesystem",
+        "disk",
+        "virtualization",
+        "qemu",
+        "kvm",
+        "copy-on-write",
+        "snapshot"
+      ],
+      "formats": [
+        {
+          "name": "QCOW2",
+          "extension": "qcow2",
+          "detects": true,
+          "confidence": 97
+        }
+      ],
+      "path": "formats/qcow2/plugin.toml"
     },
     {
       "id": "qoi",
@@ -1094,6 +1521,31 @@
         }
       ],
       "path": "formats/regf/plugin.toml"
+    },
+    {
+      "id": "rpm",
+      "name": "RPM package",
+      "version": "1.0.0",
+      "description": "RPM package: the 96-byte lead and the signature header, walking its index entries.",
+      "author": "Nybble",
+      "category": "archive",
+      "tags": [
+        "archive",
+        "package",
+        "linux",
+        "installer",
+        "cpio",
+        "redhat"
+      ],
+      "formats": [
+        {
+          "name": "RPM",
+          "extension": "rpm",
+          "detects": true,
+          "confidence": 96
+        }
+      ],
+      "path": "formats/rpm/plugin.toml"
     },
     {
       "id": "sqlite",
@@ -1259,6 +1711,62 @@
       "path": "formats/uimage/plugin.toml"
     },
     {
+      "id": "usdc",
+      "name": "USD crate file",
+      "version": "1.0.0",
+      "description": "Pixar USD binary crate bootstrap: the magic, version bytes and the offset of the table of contents.",
+      "author": "Nybble",
+      "category": "model",
+      "tags": [
+        "model",
+        "3d",
+        "usd",
+        "pixar",
+        "scene",
+        "vfx"
+      ],
+      "formats": [
+        {
+          "name": "USDC",
+          "extension": "usdc",
+          "detects": true,
+          "confidence": 95
+        }
+      ],
+      "path": "formats/usdc/plugin.toml"
+    },
+    {
+      "id": "wad",
+      "name": "Doom WAD",
+      "version": "1.0.0",
+      "description": "Doom WAD: the header and the full lump directory, followed to its offset.",
+      "author": "Nybble",
+      "category": "game",
+      "tags": [
+        "game",
+        "archive",
+        "doom",
+        "id-software",
+        "gamedev",
+        "retro"
+      ],
+      "formats": [
+        {
+          "name": "IWAD",
+          "extension": "wad",
+          "detects": true,
+          "confidence": 92
+        },
+        {
+          "name": "PWAD",
+          "extension": "wad",
+          "detects": true,
+          "confidence": 92
+        }
+      ],
+      "path": "formats/wad/plugin.toml"
+    },
+    {
       "id": "wasm",
       "name": "WebAssembly module",
       "version": "1.0.0",
@@ -1348,6 +1856,32 @@
         }
       ],
       "path": "formats/woff/plugin.toml"
+    },
+    {
+      "id": "woff2",
+      "name": "WOFF2 font",
+      "version": "1.0.0",
+      "description": "WOFF2 web font header: flavor, table count, compressed and decompressed sizes, metadata and private blocks.",
+      "author": "Nybble",
+      "category": "font",
+      "tags": [
+        "font",
+        "woff",
+        "web",
+        "typography",
+        "sfnt",
+        "brotli",
+        "compression"
+      ],
+      "formats": [
+        {
+          "name": "WOFF2",
+          "extension": "woff2",
+          "detects": true,
+          "confidence": 96
+        }
+      ],
+      "path": "formats/woff2/plugin.toml"
     },
     {
       "id": "xz",

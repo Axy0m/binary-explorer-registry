@@ -1,0 +1,5 @@
+category = "filesystem"
+tags = ["filesystem", "disk", "virtualization", "qemu", "kvm", "copy-on-write", "snapshot"]
+maintainer = "Nybble"
+homepage = "https://github.com/qemu/qemu/blob/master/docs/interop/qcow2.rst"
+sample = ""

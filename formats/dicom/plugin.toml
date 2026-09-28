@@ -1,0 +1,95 @@
+id = "dicom"
+name = "DICOM image"
+version = "1.0.0"
+description = "DICOM Part 10 file: the 128-byte preamble, the DICM magic, and the file meta group element by element."
+author = "Nybble"
+
+[[formats]]
+name = "DICOM"
+extension = "dcm"
+description = "DICOM Part 10 medical image file"
+confidence = 97
+entry = "Dicom"
+endian = "le"
+# DICM sits at offset 128, after the preamble - one of the few formats whose
+# magic is not at the start of the file.
+detect = [{ offset = 128, hex = "44 49 43 4D" }]
+schema = """
+// DICOM - the file every medical scanner writes, and the reason a CT study can
+// be read on any workstation. A Part 10 file is deliberately front-loaded: 128
+// bytes of preamble that DICOM itself does not use (some applications hide a
+// TIFF or JPEG header there so the file also opens as a picture), the four
+// bytes DICM, and then the file meta information group.
+//
+// Everything in the file meta group is encoded as explicit VR little-endian, by
+// rule, whatever the rest of the file uses. That matters, because one element
+// inside it - TransferSyntaxUID, tag (0002,0010) - names the encoding of the
+// data set that follows. Read it before trusting any byte after the meta group:
+//   1.2.840.10008.1.2        implicit VR little-endian (no VR field per element)
+//   1.2.840.10008.1.2.1      explicit VR little-endian, the common case
+//   1.2.840.10008.1.2.2      explicit VR big-endian, retired
+//   1.2.840.10008.1.2.4.50   JPEG baseline, lossy
+//   1.2.840.10008.1.2.4.70   JPEG lossless
+//   1.2.840.10008.1.2.4.90   JPEG 2000 lossless
+//   1.2.840.10008.1.2.5      RLE lossless
+//
+// An element is a group number, an element number, a two-letter value
+// representation, a length, and a value. Most VRs carry a 16-bit length; the
+// binary and sequence VRs (OB, OW, OF, OD, OL, OV, SQ, UC, UR, UT, UN) carry
+// two reserved bytes and a 32-bit length instead. Inside the meta group the
+// only long-form element is FileMetaInformationVersion, which is why it is
+// decoded on its own below.
+//
+// The data set is left as bytes: without acting on the transfer syntax above,
+// a declarative walk cannot know whether its elements even have VR fields.
+
+// (0002,0000) FileMetaInformationGroupLength - always first, always this exact
+// shape, and the only way to find where the data set starts.
+struct DicomGroupLength {
+    group       u16     "0x0002, the file meta group"
+    element     u16     "0x0000, the group length element"
+    vr          char[2] "UL, a 32-bit unsigned long"
+    length      u16     "4"
+    groupLength u32     "bytes of file meta group following this element"
+}
+
+// (0002,0001) FileMetaInformationVersion - an OB element, so it takes the
+// long form: two reserved bytes and a 32-bit length.
+struct DicomMetaVersion {
+    group    u16     "0x0002"
+    element  u16     "0x0001"
+    vr       char[2] "OB, other byte - a binary VR, so the length is 32-bit"
+    reserved u16     "reserved, zero"
+    length   u32     "2"
+    version  bytes[2] "00 01"
+}
+
+// A short-form element: the shape every remaining meta element uses.
+struct DicomElement {
+    group   u16          "group number; 0x0002 for the file meta group"
+    element u16          "element number within the group"
+    vr      char[2]      "value representation: UI a UID, SH short text, AE an application entity title"
+    length  u16          "bytes of value; always even, padded if need be"
+    value   bytes[length] "the value, laid out as the VR dictates"
+}
+
+// The meta elements after the version, decoded as a group. The walk ends on the
+// first element whose group is above 0x0002 - that entry is the boundary marker,
+// the start of the data set read under meta-group rules, not meta information.
+struct DicomMetaElements {
+    elements repeat DicomElement until group > 2 "media storage SOP class and instance UIDs, transfer syntax, implementation identifiers"
+}
+
+struct Dicom {
+    preamble  bytes[128]       "128 bytes DICOM ignores; zero, unless an application hid an image header here"
+    magic     char[4]          "DICM"
+    groupLen  DicomGroupLength "(0002,0000) - how long the file meta group is"
+    version   DicomMetaVersion "(0002,0001) - the one long-form element in the meta group"
+    // The rest of the meta group, counted exactly by the group length, with a
+    // decoded view placed over it by pointer so the byte accounting stays exact.
+    restLen = groupLen.groupLength - 14
+    metaGroup bytes[restLen]   "the remaining file meta elements"
+    decoded   at +158 DicomMetaElements "those elements, decoded"
+    dataset   bytes[*]         "the data set: patient, study, series and pixel data, in the transfer syntax named above"
+}
+"""

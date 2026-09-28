@@ -1,0 +1,55 @@
+id = "woff2"
+name = "WOFF2 font"
+version = "1.0.0"
+description = "WOFF2 web font header: flavor, table count, compressed and decompressed sizes, metadata and private blocks."
+author = "Nybble"
+
+[[formats]]
+name = "WOFF2"
+extension = "woff2"
+description = "Web Open Font Format 2.0"
+confidence = 96
+entry = "Woff2"
+endian = "be"
+detect = [{ offset = 0, hex = "77 4F 46 32" }]
+schema = """
+// WOFF2 - the web font wrapper every browser prefers, and a much more
+// aggressive design than the WOFF it replaced. WOFF compressed each sfnt table
+// with zlib and left the rest of the font alone. WOFF2 compresses all the tables
+// together as one Brotli stream, and preprocesses the two biggest ones: glyf and
+// loca are transformed into a form that compresses better and is rebuilt on
+// load. Typical result is a file 30% smaller than the same font as WOFF.
+//
+// Because the tables are one stream, the table directory cannot store offsets.
+// It stores each table's tag and lengths instead, and a reader recovers the
+// layout by decompressing and walking in order. The directory entries are also
+// variable-length: a flag byte whose low bits index a table of 63 well-known
+// tags (so common tags cost one byte, not five), then UIntBase128 lengths. That
+// makes the directory unwalkable by a declarative schema, so this pack decodes
+// the fixed 48-byte header, which is where the sizes and the metadata pointers
+// live.
+//
+// totalSfntSize is the size of the font once rebuilt, and it is a promise: a
+// reader may allocate exactly that much before decompressing. flavor says what
+// it will rebuild into - 0x00010000 for TrueType outlines, the tag OTTO for
+// PostScript ones.
+
+struct Woff2 {
+    signature          char[4] "wOF2"
+    flavor             u32     "sfnt version of the font inside: 0x00010000 for TrueType, OTTO for CFF"
+    length             u32     "total size of this file in bytes"
+    numTables          u16     "tables in the directory that follows"
+    reserved           u16     "reserved, zero"
+    totalSfntSize      u32     "size of the rebuilt, uncompressed font"
+    totalCompressedSize u32    "size of the Brotli stream holding every table"
+    majorVersion       u16     "font revision, major"
+    minorVersion       u16     "font revision, minor"
+    metaOffset         u32     "offset of the compressed XML metadata block, 0 if absent"
+    metaLength         u32     "compressed length of that block"
+    metaOrigLength     u32     "length of the metadata once decompressed"
+    privOffset         u32     "offset of the private data block, 0 if absent"
+    privLength         u32     "length of the private data block"
+    // The table directory follows: numTables entries of a flag byte, an optional
+    // 4-byte tag, and UIntBase128 lengths - then the Brotli stream itself.
+}
+"""

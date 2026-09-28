@@ -1,0 +1,53 @@
+id = "msf"
+name = "PDB debug database"
+version = "1.0.0"
+description = "Microsoft PDB / MSF 7.0 superblock: block size, the free block maps and where the stream directory lives."
+author = "Nybble"
+
+[[formats]]
+name = "PDB"
+extension = "pdb"
+description = "Microsoft program database (MSF 7.0 container)"
+confidence = 96
+entry = "MsfSuperBlock"
+endian = "le"
+detect = [{ offset = 0, hex = "4D 69 63 72 6F 73 6F 66 74 20 43 2F 43 2B 2B 20 4D 53 46 20 37 2E 30 30" }]
+schema = """
+// A PDB is the symbol file the Microsoft toolchain writes next to an executable,
+// and like a compound file it is a small filesystem: the container is MSF, the
+// Multi-Stream Format, and the debug information sits inside it as numbered
+// streams. A debugger opens the PDB, finds stream 1 to check the GUID matches
+// the binary, then reads the streams it needs.
+//
+// The file is an array of fixed-size blocks, 4096 bytes by default, numbered
+// from 0 - this superblock is block 0. A stream is a list of block numbers, and
+// the stream directory is itself a stream, which creates a bootstrapping
+// problem: the directory can be longer than one block, so its block list may not
+// fit in one block either. MSF solves it with an indirection. blockMapAddr
+// points at a block holding the block numbers of the directory, and
+// numDirectoryBytes says how long the directory is.
+//
+// freeBlockMapBlock is either 1 or 2, and the other one is a spare. A writer
+// builds the new allocation bitmap in the unused slot and then flips this field,
+// so a PDB is never left with a half-written free list - the same trick a
+// journalling filesystem uses, done with two blocks.
+//
+// The streams that matter, once the directory is read: stream 1 is the PDB
+// information stream, with the GUID and age that must match the executable's
+// debug directory; stream 2 the TPI (type information); stream 3 the DBI (module
+// and section contributions); stream 4 the IPI. The rest are per-module symbol
+// streams.
+//
+// The much older MSF 2.0 container starts with Microsoft C/C++ program database
+// 2.00 instead, and is not matched here.
+
+struct MsfSuperBlock {
+    magic             bytes[32] "Microsoft C/C++ MSF 7.00, CR LF, 1A, DS, then three zero bytes"
+    blockSize         u32       "bytes per block: 512, 1024, 2048 or 4096"
+    freeBlockMapBlock u32       "which of blocks 1 and 2 holds the live allocation bitmap"
+    numBlocks         u32       "blocks in the file; blockSize times this is the file length"
+    numDirectoryBytes u32       "length of the stream directory in bytes"
+    unknown           u32       "unused, zero"
+    blockMapAddr      u32       "block holding the list of blocks that make up the stream directory"
+}
+"""

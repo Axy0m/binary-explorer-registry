@@ -1,0 +1,121 @@
+id = "prefetch"
+name = "Windows Prefetch"
+version = "1.0.0"
+description = "Windows Prefetch (SCCA) header and the version-specific file information block: last run times and run count."
+author = "Nybble"
+
+[[formats]]
+name = "Prefetch"
+extension = "pf"
+description = "Windows Prefetch file (SCCA)"
+confidence = 94
+entry = "Prefetch"
+endian = "le"
+# SCCA sits at offset 4, after the version. Note that Windows 10 and 11 store
+# these files MAM-compressed (magic MAM 04 at offset 0); this matches the
+# uncompressed form, which is what a decompressed .pf looks like.
+detect = [{ offset = 4, hex = "53 43 43 41" }]
+schema = """
+// A Prefetch file is Windows optimising application startup, and one of the most
+// useful artefacts in a forensic timeline as a side effect. When a program runs,
+// the cache manager records which files and directories it touched in its first
+// ten seconds and writes C:/Windows/Prefetch/NAME-HASH.pf, so the next launch
+// can read them in one pass. Those recordings are evidence: the file proves the
+// program ran, when it last ran, how many times, and what it loaded.
+//
+// The format changed with almost every Windows release, and the version field is
+// the only way to read it:
+//   17  Windows XP and Server 2003
+//   23  Windows Vista and Windows 7
+//   26  Windows 8.1
+//   30  Windows 10 and 11
+//
+// From Windows 8.1 the file keeps the last eight run times rather than one, so a
+// single .pf can show a week of executions. From Windows 10 the whole file is
+// compressed with the MAM (LZXPRESS Huffman) wrapper and must be decompressed
+// before any of this is visible.
+//
+// The hash in the file name is computed over the full path of the executable,
+// which is why the same binary run from two directories produces two .pf files -
+// and why a file whose name hash does not match its stored prefetchHash is worth
+// a second look.
+//
+// The offsets in the file information block point at four sections: the file
+// metrics array (one entry per file loaded), the trace chains array (the page
+// access pattern), the filename strings (the paths those metrics name), and the
+// volumes information (the device paths and their serial numbers and creation
+// times).
+
+// Windows XP and Server 2003.
+struct PrefetchFileInfo17 {
+    metricsOffset      u32      "offset of the file metrics array"
+    metricsCount       u32      "entries in it: one per file the program loaded"
+    traceChainsOffset  u32      "offset of the trace chains array"
+    traceChainsCount   u32      "entries in it"
+    filenameStringsOffset u32   "offset of the filename strings the metrics point into"
+    filenameStringsSize u32     "bytes of those strings, UTF-16LE"
+    volumesInfoOffset  u32      "offset of the volumes information"
+    volumesCount       u32      "number of volumes involved"
+    volumesInfoSize    u32      "bytes of volumes information"
+    lastRunTime        u64      "FILETIME of the last execution, UTC"
+    unknown            bytes[16] "unknown"
+    runCount           u32      "times this program has run"
+    unknown2           u32      "unknown"
+}
+
+// Windows Vista and Windows 7: an unknown 64-bit field appears before the run
+// time, and the block grows a large unknown tail.
+struct PrefetchFileInfo23 {
+    metricsOffset      u32      "offset of the file metrics array"
+    metricsCount       u32      "entries in it"
+    traceChainsOffset  u32      "offset of the trace chains array"
+    traceChainsCount   u32      "entries in it"
+    filenameStringsOffset u32   "offset of the filename strings"
+    filenameStringsSize u32     "bytes of those strings, UTF-16LE"
+    volumesInfoOffset  u32      "offset of the volumes information"
+    volumesCount       u32      "number of volumes involved"
+    volumesInfoSize    u32      "bytes of volumes information"
+    unknown            u64      "unknown"
+    lastRunTime        u64      "FILETIME of the last execution, UTC"
+    unknown2           bytes[16] "unknown"
+    runCount           u32      "times this program has run"
+    unknown3           u32      "unknown"
+    unknown4           bytes[80] "unknown"
+}
+
+// Windows 8.1 and Windows 10 / 11: eight run times instead of one. The Windows
+// 10 layout matches this one; some later builds use a variant whose block is
+// eight bytes shorter, putting runCount at 0xC8 rather than 0xD0.
+struct PrefetchFileInfo26 {
+    metricsOffset      u32      "offset of the file metrics array"
+    metricsCount       u32      "entries in it"
+    traceChainsOffset  u32      "offset of the trace chains array"
+    traceChainsCount   u32      "entries in it"
+    filenameStringsOffset u32   "offset of the filename strings"
+    filenameStringsSize u32     "bytes of those strings, UTF-16LE"
+    volumesInfoOffset  u32      "offset of the volumes information"
+    volumesCount       u32      "number of volumes involved"
+    volumesInfoSize    u32      "bytes of volumes information"
+    unknown            u64      "unknown"
+    lastRunTimes       u64[8]   "the last eight execution times as FILETIMEs, newest first; unused slots are zero"
+    unknown2           bytes[16] "unknown"
+    runCount           u32      "times this program has run"
+    unknown3           u32      "unknown"
+    unknown4           u32      "unknown"
+    unknown5           bytes[88] "unknown"
+}
+
+struct Prefetch {
+    version        u32       "format version: 17, 23, 26 or 30 - see the table above"
+    signature      char[4]   "SCCA"
+    unknown        u32       "unknown; 0x0F, 0x11 or 0x17 in practice"
+    fileSize       u32       "size of this prefetch file in bytes"
+    executableName bytes[60] "executable file name, UTF-16LE, NUL-terminated, up to 29 characters"
+    prefetchHash   u32       "hash of the executable path; the same value appears in the file name"
+    unknown2       u32       "unknown flags"
+    fileInfo17     PrefetchFileInfo17 if version == 17 "Windows XP file information"
+    fileInfo23     PrefetchFileInfo23 if version == 23 "Windows Vista / 7 file information"
+    fileInfo26     PrefetchFileInfo26 if version == 26 "Windows 8.1 file information"
+    fileInfo30     PrefetchFileInfo26 if version == 30 "Windows 10 / 11 file information"
+}
+"""

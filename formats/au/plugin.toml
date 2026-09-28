@@ -1,0 +1,63 @@
+id = "au"
+name = "Sun AU audio"
+version = "1.0.0"
+description = "NeXT/Sun .au audio header: encoding, sample rate, channels and the annotation field."
+author = "Nybble"
+
+[[formats]]
+name = "AU"
+extension = "au"
+description = "NeXT/Sun audio (.au / .snd)"
+confidence = 92
+entry = "Au"
+endian = "be"
+detect = [{ offset = 0, hex = "2E 73 6E 64" }]
+schema = """
+// The NeXT/Sun audio file - six big-endian 32-bit words and then the samples.
+// It is the simplest of the classic audio containers, and the reason so much
+// telephony audio is 8 kHz mu-law: that is this format's default shape.
+//
+// Two fields are allowed to say I do not know. dataSize may be 0xFFFFFFFF when
+// the length was not known at write time (audio piped to a file), in which case
+// the data runs to the end of the file. dataOffset is at least 24 and doubles
+// as the length of the header: any bytes between the last field below and
+// dataOffset are the annotation, a free-form, usually NUL-padded comment.
+
+enum AuEncoding : u32 {
+    Mulaw8      = 1  // 8-bit ISDN mu-law, the telephony default
+    LinearPcm8  = 2  // 8-bit signed linear PCM
+    LinearPcm16 = 3  // 16-bit signed linear PCM
+    LinearPcm24 = 4  // 24-bit signed linear PCM
+    LinearPcm32 = 5  // 32-bit signed linear PCM
+    Float32     = 6  // 32-bit IEEE floating point
+    Float64     = 7  // 64-bit IEEE floating point
+    Fragmented  = 8  // fragmented sampled data
+    Dsp         = 10 // DSP program
+    Fixed8      = 11 // 8-bit fixed point
+    Fixed16     = 12 // 16-bit fixed point
+    Fixed24     = 13 // 24-bit fixed point
+    Fixed32     = 14 // 32-bit fixed point
+    Emphasis16  = 18 // 16-bit linear with emphasis
+    Compressed16 = 19 // 16-bit linear, compressed
+    EmphasisCompressed16 = 20 // 16-bit linear with emphasis and compression
+    DspCommands = 21 // Music Kit DSP commands
+    G721Adpcm   = 23 // 4-bit ISDN mu-law, G.721 ADPCM
+    G722        = 24 // ISDN mu-law, G.722 ADPCM
+    G723_3      = 25 // 3-bit ISDN mu-law, G.723 ADPCM
+    G723_5      = 26 // 5-bit ISDN mu-law, G.723 ADPCM
+    Alaw8       = 27 // 8-bit ISDN A-law
+}
+
+struct Au {
+    magic      bytes[4]   "2E 73 6E 64, the ASCII .snd"
+    dataOffset u32        "file offset of the audio; also the header length, at least 24"
+    dataSize   u32        "bytes of audio, or 0xFFFFFFFF when the length was unknown"
+    encoding   AuEncoding "how each sample is stored"
+    sampleRate u32        "frames per second (8000 for telephony, 44100 for CD audio)"
+    channels   u32        "interleaved channel count (1 mono, 2 stereo)"
+    // Whatever sits between here and dataOffset is the annotation; the audio
+    // itself starts at dataOffset.
+    annotationLen = dataOffset - 24
+    annotation bytes[annotationLen] "free-form comment, usually NUL-padded, filling the header out to dataOffset"
+}
+"""

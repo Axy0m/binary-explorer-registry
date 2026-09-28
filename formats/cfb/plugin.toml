@@ -1,0 +1,104 @@
+id = "cfb"
+name = "Compound File Binary"
+version = "1.0.0"
+description = "OLE2 / Compound File Binary header: sector sizes, the FAT and DIFAT chains, and the first directory sector."
+author = "Nybble"
+
+[[formats]]
+name = "CFB"
+extension = "doc"
+description = "Compound File Binary (OLE2: .doc, .xls, .ppt, .msi, .msg)"
+confidence = 95
+entry = "Cfb"
+endian = "le"
+detect = [{ offset = 0, hex = "D0 CF 11 E0 A1 B1 1A E1" }]
+schema = """
+// Compound File Binary - Microsoft's filesystem in a file, and what a legacy
+// .doc, .xls, .ppt, .msi or Outlook .msg actually is. It is also the reason
+// those files hide so much: the container has directories, streams, free space
+// and slack, all of it inside one file.
+//
+// The design is FAT, scaled down. The file is an array of sectors, numbered
+// from 0 starting immediately after this 512-byte header, each 512 bytes (v3)
+// or 4096 bytes (v4). A stream is a chain of sectors, and the FAT is one entry
+// per sector giving the next one, with these terminators:
+//   0xFFFFFFFF  free            0xFFFFFFFE  end of chain
+//   0xFFFFFFFD  a FAT sector    0xFFFFFFFC  a DIFAT sector
+//
+// The FAT itself is stored in sectors, and the list of those sectors is the
+// DIFAT. Its first 109 entries live in this header, which covers roughly 6.8 MB
+// in a v3 file; larger files chain further DIFAT sectors from difatFirstSector.
+//
+// Streams smaller than miniStreamCutoff (4096 bytes by default) do not get a
+// sector each. They are packed into the mini stream and allocated by the MiniFAT
+// in 64-byte mini sectors - which is where small streams, and their slack, end
+// up.
+//
+// Directory entries are 128 bytes each, so 4 to a v3 sector. Entry 0 is the
+// root, whose stream is the mini stream. The entries form a red-black tree per
+// directory, which is why each one carries sibling and child pointers rather
+// than a flat list.
+
+enum CfbObjectType : u8 {
+    Unallocated = 0
+    Storage     = 1 // a directory
+    Stream      = 2 // a file
+    RootEntry   = 5 // the root storage; its stream is the mini stream
+}
+
+enum CfbColor : u8 {
+    Red   = 0
+    Black = 1
+}
+
+// One 128-byte directory entry. The name is UTF-16LE and NUL-terminated, and
+// the first character is sometimes below 0x20 to mark an internal stream - the
+// 0x05 prefix on SummaryInformation, for instance.
+struct CfbDirectoryEntry {
+    name         bytes[64]     "entry name, UTF-16LE, NUL-terminated"
+    nameLength   u16           "bytes of name in use, terminator included"
+    objectType   CfbObjectType "storage, stream, or the root"
+    colorFlag    CfbColor      "red-black tree colour of this node"
+    leftSibling  u32           "directory id of the left sibling, 0xFFFFFFFF for none"
+    rightSibling u32           "directory id of the right sibling, 0xFFFFFFFF for none"
+    child        u32           "directory id of the first child, for a storage"
+    clsid        bytes[16]     "CLSID of the object, for a storage"
+    stateBits    u32           "user-defined state flags"
+    creationTime u64           "FILETIME: 100-nanosecond ticks since 1601-01-01 UTC"
+    modifiedTime u64           "FILETIME of the last modification"
+    startSector  u32           "first sector of the stream, or of the mini stream for the root"
+    streamSize   u64           "stream length in bytes"
+}
+
+struct CfbDirectorySector {
+    entries CfbDirectoryEntry[4] "the first four entries; the root is entry 0"
+}
+
+struct Cfb {
+    signature         bytes[8]  "D0 CF 11 E0 A1 B1 1A E1"
+    clsid             bytes[16] "unused, zero"
+    minorVersion      u16       "0x003E in practice"
+    majorVersion      u16       "3 for 512-byte sectors, 4 for 4096-byte sectors"
+    byteOrder         u16       "0xFFFE, marking little-endian"
+    sectorShift       u16       "sector size as a power of two: 9 means 512 bytes, 12 means 4096"
+    miniSectorShift   u16       "mini sector size as a power of two; always 6, so 64 bytes"
+    reserved          bytes[6]  "reserved, zero"
+    numDirSectors     u32       "sectors in the directory chain; 0 in a v3 file"
+    numFatSectors     u32       "sectors making up the FAT"
+    firstDirSector    u32       "first sector of the directory chain"
+    transactionSignature u32    "incremented by transactioned writers; 0 otherwise"
+    miniStreamCutoff  u32       "streams below this size live in the mini stream; always 4096"
+    firstMiniFatSector u32      "first sector of the MiniFAT chain"
+    numMiniFatSectors u32       "sectors making up the MiniFAT"
+    difatFirstSector  u32       "first DIFAT sector, when the 109 entries below are not enough"
+    numDifatSectors   u32       "sectors making up the rest of the DIFAT"
+    difat             u32[109]  "the first 109 FAT sector numbers; unused slots are 0xFFFFFFFF"
+    // Sector n starts at (n + 1) * sectorSize, because sector 0 follows this
+    // 512-byte header - so where the directory begins depends on sectorShift.
+    // Both sector sizes are followed here; only the one this file uses appears.
+    dirOffsetV3 = firstDirSector * 512 + 512
+    dirOffsetV4 = firstDirSector * 4096 + 4096
+    rootDirectoryV3 at dirOffsetV3 CfbDirectorySector if sectorShift == 9 "first directory sector, 512-byte sectors: the root entry, then the first storages and streams"
+    rootDirectoryV4 at dirOffsetV4 CfbDirectorySector if sectorShift == 12 "first four entries of the first directory sector; a 4096-byte sector holds 32 of them"
+}
+"""

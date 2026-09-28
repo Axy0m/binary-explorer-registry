@@ -1,0 +1,51 @@
+id = "n64"
+name = "Nintendo 64 ROM"
+version = "1.0.0"
+description = "Nintendo 64 cartridge header: clock rate, boot address, the two CIC check codes and the cartridge id."
+author = "Nybble"
+
+[[formats]]
+name = "N64"
+extension = "z64"
+description = "Nintendo 64 cartridge ROM, big-endian (.z64)"
+confidence = 90
+entry = "N64Rom"
+endian = "be"
+detect = [{ offset = 0, hex = "80 37 12 40" }]
+schema = """
+// The Nintendo 64 cartridge header - 64 bytes, big-endian, and followed by the
+// 4032-byte IPL3 boot code that the console runs before the game.
+//
+// The first word doubles as a byte-order mark, which is why N64 ROM dumps come
+// in three flavours. 80 37 12 40 is the native big-endian order, the .z64
+// files this pack matches. A dump in 16-bit byte-swapped order (.v64) starts
+// 37 80 40 12, and a little-endian one (.n64) starts 40 12 37 80 - both need
+// reordering before anything below lines up.
+//
+// crc1 and crc2 are the checksums the CIC lockout chip and IPL3 verify over the
+// first megabyte of the ROM. They are not a plain CRC-32: the algorithm depends
+// on which CIC variant the cartridge carries, and a ROM patcher has to
+// recompute them or the console refuses to boot.
+//
+// The cartridge id is what a ROM database identifies a game by - NSME is Super
+// Mario 64, North America - and the country code says which region the
+// cartridge was sold in: 45 E North America, 4A J Japan, 50 P Europe.
+
+struct N64Rom {
+    endianness   bytes[4]  "80 37 12 40 in a native big-endian dump"
+    clockRate    u32       "clock rate override for the PI bus; 0 means use the default"
+    bootAddress  u32       "virtual address IPL3 loads the game to, usually 0x80000400"
+    libultraVersion u32    "release and revision of the libultra SDK the game was built with"
+    crc1         u32       "first CIC check code over the first megabyte"
+    crc2         u32       "second CIC check code"
+    unused1      bytes[8]  "unused, zero"
+    imageName    string[20] "internal game title, uppercase ASCII, space padded"
+    unused2      bytes[7]  "unused, zero"
+    mediaFormat  char      "N for a cartridge, D for 64DD disk, C for a cartridge part of a disk pair"
+    cartridgeId  string[2] "two-character game id, as a ROM database lists it"
+    countryCode  char      "region the cartridge was sold in: E, J or P"
+    version      u8        "revision of the game, counting from 0"
+    // The 4032 bytes that follow are IPL3, the boot code the PIF hands control
+    // to; the game's own code starts after it.
+}
+"""

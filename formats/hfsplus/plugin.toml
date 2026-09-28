@@ -1,0 +1,95 @@
+id = "hfsplus"
+name = "HFS+ volume header"
+version = "1.0.0"
+description = "HFS+ / HFSX volume header at offset 1024: block counts, timestamps and the five special file forks."
+author = "Nybble"
+
+[[formats]]
+name = "HFS+"
+extension = "dmg"
+description = "HFS+ or HFSX volume header"
+confidence = 88
+entry = "HfsPlus"
+endian = "be"
+# H+ at offset 1024, the volume header's home. HFSX volumes carry HX there
+# instead and are not matched by this rule, though the layout below is identical.
+detect = [{ offset = 1024, hex = "48 2B" }]
+schema = """
+// HFS+ - the Mac filesystem from 1998 until APFS replaced it, and still what a
+// plain .dmg or an old Time Machine disk contains. Big-endian, because it was
+// designed for 68k and PowerPC Macs.
+//
+// The volume header sits 1024 bytes into the volume, leaving room for two boot
+// blocks, and a copy of it sits 1024 bytes before the end. Point this at a raw
+// partition image or a decompressed .dmg.
+//
+// What makes HFS+ distinctive is that its own metadata lives in ordinary files,
+// described by the five forks at the end of this header. The catalog file is a
+// B-tree of every file and folder record; the extents overflow file holds the
+// extent lists too long to fit in a catalog record; the allocation file is the
+// block bitmap; the attributes file holds extended attributes, and is where a
+// compressed file's data ends up. A fork is described by eight extents inline,
+// each a start block and a length - further extents go in the overflow file.
+//
+// Timestamps are seconds since 1904-01-01, the classic Mac epoch, and are in
+// local time in this header (the one place HFS+ does that) except for
+// createDate, which is UTC.
+//
+// The signature also tells the two variants apart: H+ is HFS+ with a
+// case-insensitive catalog, HX is HFSX, which may be case sensitive.
+
+bitfield HfsVolumeAttributes : u32 {
+    hardwareLock      7  // mounted read-only by hardware
+    unmounted         8  // cleanly unmounted; if clear, the volume needs a check
+    sparedBlocks      9  // bad blocks have been spared into the bad block file
+    noCacheRequired   10 // the volume is on a device that should not be cached
+    bootVolumeInconsistent 11 // set on mount, cleared on unmount: a dirty flag
+    catalogNodeIdsReused 12 // the catalog node id counter has wrapped
+    journaled         13 // the volume has a journal; journalInfoBlock is valid
+    softwareLock      15 // mounted read-only by software
+}
+
+// One extent: a run of contiguous allocation blocks.
+struct HfsExtent {
+    startBlock u32 "first allocation block of the run"
+    blockCount u32 "length of the run in allocation blocks"
+}
+
+// A fork: its size, and the first eight extents of its contents.
+struct HfsForkData {
+    logicalSize u64          "size of the fork in bytes"
+    clumpSize   u32          "bytes to grow this fork by when it needs more space"
+    totalBlocks u32          "allocation blocks the fork occupies"
+    extents     HfsExtent[8] "the first eight extents; the rest live in the extents overflow file"
+}
+
+struct HfsPlus {
+    bootBlocks         bytes[1024]         "two boot blocks, not part of the filesystem metadata"
+    signature          char[2]             "H+ for HFS+, HX for HFSX"
+    version            u16                 "4 for HFS+, 5 for HFSX"
+    attributes         HfsVolumeAttributes "volume flags"
+    lastMountedVersion char[4]             "implementation that last mounted the volume: 10.0 for macOS, HFSJ when journaled, fsck for a repair"
+    journalInfoBlock   u32                 "allocation block holding the journal info, when journaled"
+    createDate         u32                 "volume creation time, seconds since 1904-01-01, UTC"
+    modifyDate         u32                 "last modification, local time"
+    backupDate         u32                 "last backup, local time"
+    checkedDate        u32                 "last consistency check, local time"
+    fileCount          u32                 "files on the volume, not counting the special files"
+    folderCount        u32                 "folders, not counting the root"
+    blockSize          u32                 "allocation block size in bytes; 4096 is usual"
+    totalBlocks        u32                 "allocation blocks on the volume"
+    freeBlocks         u32                 "unused allocation blocks"
+    nextAllocation     u32                 "where to start looking for free space"
+    rsrcClumpSize      u32                 "default clump size for resource forks"
+    dataClumpSize      u32                 "default clump size for data forks"
+    nextCatalogId      u32                 "next catalog node id to hand out"
+    writeCount         u32                 "bumped every time the volume is mounted for writing"
+    encodingsBitmap    u64                 "which text encodings the volume names use"
+    finderInfo         u32[8]              "Finder information: blessed system folder and boot directory ids"
+    allocationFile     HfsForkData         "the allocation bitmap: one bit per allocation block"
+    extentsFile        HfsForkData         "the extents overflow file: extents beyond the eight inline ones"
+    catalogFile        HfsForkData         "the catalog: a B-tree of every file and folder record"
+    attributesFile     HfsForkData         "extended attributes, including compressed file data"
+    startupFile        HfsForkData         "boot loader data for systems that need it; usually empty"
+}
+"""

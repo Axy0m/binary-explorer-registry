@@ -1,0 +1,5 @@
+category = "archive"
+tags = ["archive", "package", "linux", "installer", "cpio", "redhat"]
+maintainer = "Nybble"
+homepage = "https://rpm-software-management.github.io/rpm/manual/format.html"
+sample = ""

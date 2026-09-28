@@ -1,0 +1,5 @@
+category = "game"
+tags = ["game", "rom", "cartridge", "nintendo", "gba", "arm", "emulation", "retro"]
+maintainer = "Nybble"
+homepage = "https://problemkaputt.de/gbatek.htm#gbacartridgeheader"
+sample = ""

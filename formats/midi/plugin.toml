@@ -1,0 +1,55 @@
+id = "midi"
+name = "MIDI file"
+version = "1.0.0"
+description = "Standard MIDI File: the MThd header chunk and every MTrk track chunk."
+author = "Nybble"
+
+[[formats]]
+name = "MIDI"
+extension = "mid"
+description = "Standard MIDI File (SMF)"
+confidence = 95
+entry = "Midi"
+endian = "be"
+detect = [{ offset = 0, hex = "4D 54 68 64" }]
+schema = """
+// Standard MIDI File - big-endian, and built from chunks: a four-character
+// type, a 32-bit length, then that many bytes. The first chunk is always MThd
+// and always six bytes long; every chunk after it is an MTrk holding one
+// track's event stream.
+//
+// Events inside a track are delta-time / message pairs where the delta time is
+// a variable-length quantity, so a declarative walk cannot step through them.
+// Each MTrk is therefore shown as its length and its bytes, which is enough to
+// see how the tracks are laid out and where each one ends.
+//
+// division is the one field whose meaning changes with its sign. Positive is
+// metrical time: ticks per quarter note (96, 480 and 960 are the common
+// values). Negative is SMPTE time: the high byte is the negated frame rate
+// (24, 25, 29 for drop-frame, 30) and the low byte the ticks per frame.
+
+enum MidiFormat : u16 {
+    SingleTrack        = 0 // one track holding everything
+    SimultaneousTracks = 1 // tracks played together, one song
+    IndependentTracks  = 2 // tracks are separate songs or patterns
+}
+
+struct MidiHeader {
+    type     char[4]    "MThd"
+    length   u32        "bytes of header data; always 6"
+    format   MidiFormat "how the tracks relate to each other"
+    ntrks    u16        "number of track chunks (always 1 for format 0)"
+    division i16        "ticks per quarter note, or SMPTE when negative"
+}
+
+struct MidiTrack {
+    type   char[4]       "MTrk"
+    length u32           "bytes of event data in this track"
+    events bytes[length] "delta time / message pairs, ending with the end-of-track meta event FF 2F 00"
+}
+
+struct Midi {
+    header MidiHeader       "the MThd chunk: format, track count, time division"
+    tracks repeat MidiTrack "one MTrk per track, in order"
+}
+"""

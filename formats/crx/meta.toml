@@ -1,0 +1,5 @@
+category = "archive"
+tags = ["archive", "zip", "chrome", "extension", "web", "signature"]
+maintainer = "Nybble"
+homepage = "https://chromium.googlesource.com/chromium/src/+/main/components/crx_file/crx3.proto"
+sample = ""

@@ -1,0 +1,51 @@
+id = "crx"
+name = "Chrome extension"
+version = "1.0.0"
+description = "Chrome extension package (CRX2 and CRX3): the signed header that precedes the zip."
+author = "Nybble"
+
+[[formats]]
+name = "CRX"
+extension = "crx"
+description = "Chrome / Chromium extension package"
+confidence = 95
+entry = "Crx"
+endian = "le"
+detect = [{ offset = 0, hex = "43 72 32 34" }]
+schema = """
+// A Chrome extension is a zip archive with a signature stapled to the front.
+// The point of the header is provenance: the extension id is derived from the
+// public key in it, so the same key always produces the same id, and an update
+// signed by a different key is rejected.
+//
+// Two versions exist, and they lay the header out differently. CRX2 puts a raw
+// RSA public key and a signature in the header. CRX3 replaced that with a
+// protobuf message (CrxFileHeader) holding one or more proofs, each a key and a
+// signature, which is what allows a package to be signed by both the developer
+// and the store.
+//
+// In both cases the zip begins immediately after the header, so an extension
+// can be unzipped by skipping it - and the zip is where the manifest.json and
+// the extension's code live.
+
+struct Crx2Header {
+    publicKeyLength u32 "bytes of RSA public key, DER encoded SubjectPublicKeyInfo"
+    signatureLength u32 "bytes of RSA SHA-1 signature over the zip"
+    publicKey bytes[publicKeyLength] "the developer public key the extension id is derived from"
+    signature bytes[signatureLength] "signature over the zip that follows"
+}
+
+struct Crx3Header {
+    headerLength u32 "bytes of CrxFileHeader protobuf that follow"
+    header bytes[headerLength] "CrxFileHeader: signed_header_data plus one proof per signing key"
+}
+
+struct Crx {
+    magic   char[4]     "Cr24"
+    version u32         "2 or 3; 3 is what Chrome has published since 2017"
+    crx2    Crx2Header  if version == 2 "raw key and signature"
+    crx3    Crx3Header  if version == 3 "protobuf header carrying the signing proofs"
+    // The zip archive starts here: manifest.json, then the extension's files.
+    zip     bytes[*]    "the extension payload, a zip archive"
+}
+"""

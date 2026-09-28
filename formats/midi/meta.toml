@@ -1,0 +1,5 @@
+category = "audio"
+tags = ["audio", "midi", "music", "chunked"]
+maintainer = "Nybble"
+homepage = "https://midi.org/standard-midi-files-specification"
+sample = ""

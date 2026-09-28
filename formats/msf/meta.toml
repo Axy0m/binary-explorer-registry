@@ -1,0 +1,5 @@
+category = "system"
+tags = ["system", "windows", "microsoft", "debugging", "symbols", "pdb", "executable"]
+maintainer = "Nybble"
+homepage = "https://llvm.org/docs/PDB/MsfFile.html"
+sample = ""

@@ -1,0 +1,5 @@
+category = "game"
+tags = ["game", "rom", "cartridge", "nintendo", "n64", "mips", "emulation", "retro"]
+maintainer = "Nybble"
+homepage = "https://n64brew.dev/wiki/ROM_Header"
+sample = ""

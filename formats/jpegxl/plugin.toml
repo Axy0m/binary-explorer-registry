@@ -1,0 +1,76 @@
+id = "jpegxl"
+name = "JPEG XL image"
+version = "1.0.0"
+description = "JPEG XL container: the signature box and a walk of every box, decoding ftyp, jxll, jxlp and brob."
+author = "Nybble"
+
+[[formats]]
+name = "JXL"
+extension = "jxl"
+description = "JPEG XL image, ISOBMFF container form"
+confidence = 96
+entry = "Jxl"
+endian = "be"
+# The 12-byte signature box: size 0x0000000C, type "JXL ", then 0D 0A 87 0A.
+detect = [{ offset = 0, hex = "00 00 00 0C 4A 58 4C 20 0D 0A 87 0A" }]
+schema = """
+// JPEG XL in its container form - the same box structure as MP4 and HEIF: a
+// 32-bit size, a four-character type, then the body. A size of 1 means a 64-bit
+// size follows; 0 means the box runs to the end of the file.
+//
+// A bare JPEG XL codestream instead starts with the two bytes FF 0A and is a
+// bit-packed stream from its first byte, so it has no byte-aligned structure to
+// walk; this pack covers the container, which is what a .jxl file from an
+// encoder normally is. The container is required once a file carries Exif, XMP,
+// an ICC profile, animation, or a reconstructible original JPEG.
+//
+// The boxes that matter:
+//   JXL   the 12-byte signature box, always first
+//   ftyp  file type, brand jxl
+//   jxll  level: 5 for the baseline, 10 for images beyond its size limits
+//   jxlc  the whole codestream, when it is stored in one piece
+//   jxlp  one partial codestream, for progressive files; carries an index
+//   jbrd  JPEG bitstream reconstruction data, to rebuild a source JPEG exactly
+//   brob  a Brotli-compressed box, whose real type is its first four bytes
+//   Exif  Exif metadata
+//   xml   XMP metadata
+
+struct JxlFileType {
+    brand        char[4] "jxl "
+    minorVersion u32     "minor version of the brand"
+    // compatible brands, 4 chars each, run to the end of the box
+}
+
+struct JxlLevel {
+    level u8 "codestream level: 5 baseline, 10 for very large or high bit depth images"
+}
+
+struct JxlPartialCodestream {
+    index u32 "sequence number of this partial codestream; the high bit marks the last one"
+}
+
+struct JxlBrotliBox {
+    innerType char[4] "the box type this expands to once Brotli-decompressed"
+}
+
+struct JxlBox {
+    size  u32       "box size including this header; 1 = 64-bit size follows, 0 = to end of file"
+    type  char[4]   "four-character box type"
+    large u64       if size == 1 "64-bit box size, when size is 1"
+    toEnd bytes[*]  if size == 0 "box body, running to the end of the file"
+    bodyLen = size - 8
+    body  bytes[bodyLen] if size > 7 "box body"
+    // Typed view of the body, placed by pointer so the size walk is untouched.
+    decoded at +8 match type {
+        "ftyp" => JxlFileType
+        "jxll" => JxlLevel
+        "jxlp" => JxlPartialCodestream
+        "brob" => JxlBrotliBox
+        default => bytes[0]
+    }
+}
+
+struct Jxl {
+    boxes repeat JxlBox "top-level boxes, in file order, signature box first"
+}
+"""

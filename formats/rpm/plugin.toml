@@ -1,0 +1,98 @@
+id = "rpm"
+name = "RPM package"
+version = "1.0.0"
+description = "RPM package: the 96-byte lead and the signature header, walking its index entries."
+author = "Nybble"
+
+[[formats]]
+name = "RPM"
+extension = "rpm"
+description = "RPM Package Manager package"
+confidence = 96
+entry = "Rpm"
+endian = "be"
+detect = [{ offset = 0, hex = "ED AB EE DB" }]
+schema = """
+// An RPM package is four parts, in order: a 96-byte lead, a signature header, a
+// main header, and then a compressed cpio archive holding the files. Everything
+// is big-endian, which is a legacy of RPM's first port.
+//
+// The lead is obsolete - rpm has ignored most of it since version 4 - but it is
+// still written, and it is still what file(1) matches on. The real metadata is
+// in the two headers, which share one structure: a magic, a count of index
+// entries, and the size of the data blob those entries point into. Each entry
+// says which tag it is, its type, its offset into the blob, and how many values
+// it has.
+//
+// This pack decodes the lead and the signature header's index. The main header
+// follows the signature header on an 8-byte boundary, and its offset depends on
+// the signature data size, so it is not reachable declaratively.
+//
+// Tags worth recognising in the signature header: 1000 is the package size,
+// 1004 an MD5 digest, 1002 a PGP signature over the main header and payload,
+// 269 a SHA-1 of the header, 273 an OpenPGP signature of the header.
+
+enum RpmType : u16 {
+    Binary = 0 // a package of built files
+    Source = 1 // a source package, a .src.rpm
+}
+
+enum RpmSignatureType : u16 {
+    HeaderSignature = 5 // the only value rpm accepts: signatures live in a header structure
+}
+
+enum RpmTagType : u32 {
+    Null        = 0
+    Char        = 1
+    Int8        = 2
+    Int16       = 3
+    Int32       = 4
+    Int64       = 5
+    String      = 6 // one NUL-terminated string
+    Bin         = 7 // opaque bytes: digests, signatures
+    StringArray = 8 // count NUL-terminated strings
+    I18nString  = 9 // a string with translations, indexed by the locale table
+}
+
+// The lead. Kept for compatibility; rpm trusts the headers instead.
+struct RpmLead {
+    magic       bytes[4]         "ED AB EE DB"
+    major       u8               "format major version, 3 or 4"
+    minor       u8               "format minor version, 0"
+    type        RpmType          "binary or source package"
+    archNum     u16              "architecture the package was built for, an rpm-internal number"
+    name        string[66]       "package name and version, NUL-padded"
+    osNum       u16              "target operating system, an rpm-internal number (1 is Linux)"
+    signatureType RpmSignatureType "how the signature is stored; always 5"
+    reserved    bytes[16]        "reserved, zero"
+}
+
+// One index entry. The offset is into the data blob that follows the index, not
+// into the file.
+struct RpmIndexEntry {
+    tag    i32       "which piece of metadata this is"
+    type   RpmTagType "how the value is stored"
+    offset i32       "offset of the value within the data blob"
+    count  u32       "number of values of that type"
+}
+
+// A header structure: magic, index, then the blob the index points into. Both
+// the signature header and the main header use it.
+struct RpmHeader {
+    magic     bytes[3]              "8E AD E8"
+    version   u8                    "header structure version, 1"
+    reserved  bytes[4]              "reserved, zero"
+    numIndex  u32                   "index entries that follow"
+    dataSize  u32                   "bytes of data blob after the index"
+    index     RpmIndexEntry[numIndex] "the index: one entry per tag present"
+    data      bytes[dataSize]       "the blob every entry above points into"
+}
+
+struct Rpm {
+    lead      RpmLead   "the obsolete but still written 96-byte lead"
+    signature RpmHeader "the signature header: digests and signatures over the rest of the file"
+    // The main header starts at the next 8-byte boundary after the signature
+    // header, so where it lands depends on dataSize above; the compressed cpio
+    // payload follows it.
+}
+"""

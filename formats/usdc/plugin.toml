@@ -1,0 +1,43 @@
+id = "usdc"
+name = "USD crate file"
+version = "1.0.0"
+description = "Pixar USD binary crate bootstrap: the magic, version bytes and the offset of the table of contents."
+author = "Nybble"
+
+[[formats]]
+name = "USDC"
+extension = "usdc"
+description = "Pixar Universal Scene Description, binary crate format"
+confidence = 95
+entry = "Usdc"
+endian = "le"
+detect = [{ offset = 0, hex = "50 58 52 2D 55 53 44 43" }]
+schema = """
+// USD crate - the binary form of Pixar's Universal Scene Description, the scene
+// format the film industry standardised on. A .usd file may be this, or the text
+// .usda form; .usdc is always this, and .usdz is a zip of both.
+//
+// The layout is unusual and deliberate: the file is read back to front. The
+// first 88 bytes are the bootstrap, whose only real payload is tocOffset - the
+// offset of the table of contents, which sits at the end of the file. The table
+// lists the sections (TOKENS, STRINGS, FIELDS, FIELDSETS, PATHS, SPECS) and
+// where each one starts.
+//
+// That ordering is what makes a crate file cheap to open. A consumer reads the
+// bootstrap, jumps to the table, and then loads only the sections it needs -
+// so a renderer can resolve one prim out of a scene of millions without
+// touching the rest. It also means data can be appended and the table rewritten
+// without moving anything.
+//
+// Each table entry is a 16-byte name, a 64-bit offset and a 64-bit size, so the
+// table itself is a count followed by fixed-size records - but it lives at
+// tocOffset, which points near the end of the file rather than forward from
+// here.
+
+struct Usdc {
+    ident     char[8]  "PXR-USDC"
+    version   bytes[8] "major, minor and patch in the first three bytes; the rest reserved"
+    tocOffset i64      "offset of the table of contents, near the end of the file"
+    reserved  i64[8]   "reserved, zero"
+}
+"""

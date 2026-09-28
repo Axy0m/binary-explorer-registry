@@ -1,0 +1,156 @@
+id = "nifti"
+name = "NIfTI-1 image"
+version = "1.0.0"
+description = "NIfTI-1 348-byte header: dimensions, data type, scaling and both spatial transforms."
+author = "Nybble"
+
+[[formats]]
+name = "NIfTI"
+extension = "nii"
+description = "NIfTI-1 neuroimaging volume (single file, .nii)"
+confidence = 95
+entry = "Nifti1"
+endian = "le"
+# The n+1 magic sits at offset 344, the last four bytes of the header. A .hdr /
+# .img pair carries ni1 there instead and is not matched: the voxels are in the
+# other file.
+detect = [{ offset = 344, hex = "6E 2B 31 00" }]
+schema = """
+// NIfTI-1 - the neuroimaging volume format, and a careful extension of the
+// older ANALYZE 7.5 header it is binary-compatible with. The header is exactly
+// 348 bytes; in a .nii file the voxels follow at voxOffset (352 when there are
+// no extensions, because a 4-byte extension flag sits after the header).
+//
+// Several fields exist only to keep ANALYZE readers working - dataType,
+// dbName, extents, regular and the glmax / glmin pair are unused by NIfTI and
+// are documented as such below.
+//
+// What makes the format worth reading is that it records where the voxels are
+// in the scanner, not just how many there are. Two independent transforms map
+// voxel indices to millimetres in a right-handed anatomical space: a rigid one
+// stored as a quaternion (qform, the scanner's own position) and a full affine
+// stored as three rows (sform, usually the result of registering to a template).
+// Either may be unused; qformCode and sformCode say which to trust.
+//
+// dim is index-based: dim[0] is how many of the remaining entries are in use,
+// then dim[1..3] are the spatial sizes, dim[4] the time points, and dim[5..7]
+// any further dimensions. pixdim matches it, with pixdim[0] carrying the sign
+// of the qform determinant rather than a size.
+
+enum NiftiDataType : i16 {
+    Unknown    = 0
+    Binary     = 1   // 1 bit per voxel
+    Uint8      = 2
+    Int16      = 4
+    Int32      = 8
+    Float32    = 16
+    Complex64  = 32  // two 32-bit floats
+    Float64    = 64
+    Rgb24      = 128 // three bytes per voxel
+    Int8       = 256
+    Uint16     = 512
+    Uint32     = 768
+    Int64      = 1024
+    Uint64     = 1280
+    Float128   = 1536
+    Complex128 = 1792 // two 64-bit floats
+    Complex256 = 2048
+    Rgba32     = 2304
+}
+
+enum NiftiIntent : i16 {
+    None          = 0
+    Correlation   = 2
+    TTest         = 3
+    FTest         = 4
+    ZScore        = 5
+    ChiSquared    = 6
+    Beta          = 7
+    Pval          = 22
+    LogPval       = 23
+    Estimate      = 1001 // the values are parameter estimates, not statistics
+    Label         = 1002 // an atlas or segmentation: each value names a region
+    Neuroname     = 1003
+    GeneralMatrix = 1004
+    SymmetricMatrix = 1005
+    DisplacementVector = 1006
+    Vector        = 1007
+    Pointset      = 1008
+    Triangle      = 1009
+    Quaternion    = 1010
+    Dimensionless = 1011
+}
+
+enum NiftiXform : i16 {
+    Unknown      = 0 // this transform is unused; fall back to pixdim scaling
+    ScannerAnat  = 1 // scanner-based anatomical coordinates
+    AlignedAnat  = 2 // aligned to another image in the same session
+    Talairach    = 3 // Talairach-Tournoux atlas space
+    Mni152       = 4 // MNI 152 template space
+}
+
+enum NiftiSliceCode : u8 {
+    Unknown         = 0
+    Sequential      = 1 // 1, 2, 3, ... in increasing z
+    SequentialDown  = 2 // in decreasing z
+    Alternating     = 3 // interleaved, starting at the first slice
+    AlternatingDown = 4
+    Alternating2    = 5 // interleaved, starting at the second slice
+    Alternating2Down = 6
+}
+
+// xyztUnits packs two unit codes into one byte: the low three bits are the
+// spatial unit, the next three the temporal one. 1 metre, 2 millimetre,
+// 3 micrometre; 8 second, 16 millisecond, 24 microsecond, and 32, 40, 48 for
+// the frequency-domain units Hz, ppm and rad/s.
+bitfield NiftiUnits : u8 {
+    space 0..2
+    time  3..5
+}
+
+struct Nifti1 {
+    sizeofHdr    i32           "header size; must be 348"
+    dataType     string[10]    "unused, kept for ANALYZE compatibility"
+    dbName       string[18]    "unused, kept for ANALYZE compatibility"
+    extents      i32           "unused, kept for ANALYZE compatibility"
+    sessionError i16           "unused, kept for ANALYZE compatibility"
+    regular      char          "unused; ANALYZE writers put r here"
+    dimInfo      u8            "which dimension is frequency, phase and slice encoded, 2 bits each"
+    dim          i16[8]        "dim[0] is the number of dimensions in use; dim[1..3] the volume size, dim[4] time points"
+    intentP1     f32           "first intent parameter, meaning set by intentCode"
+    intentP2     f32           "second intent parameter"
+    intentP3     f32           "third intent parameter"
+    intentCode   NiftiIntent   "what the voxel values mean"
+    datatype     NiftiDataType "how each voxel is stored"
+    bitpix       i16           "bits per voxel; must agree with datatype"
+    sliceStart   i16           "index of the first slice acquired"
+    pixdim       f32[8]        "voxel size along each dimension; pixdim[0] carries the qform determinant sign"
+    voxOffset    f32           "file offset of the voxel data; 352 in a .nii with no extensions"
+    sclSlope     f32           "scaling: real value = sclSlope * stored + sclInter (0 means no scaling)"
+    sclInter     f32           "scaling intercept"
+    sliceEnd     i16           "index of the last slice acquired"
+    sliceCode    NiftiSliceCode "slice timing order"
+    xyztUnits    NiftiUnits    "units for the spatial and temporal dimensions"
+    calMax       f32           "display window maximum"
+    calMin       f32           "display window minimum"
+    sliceDuration f32          "time to acquire one slice"
+    toffset      f32           "time of the first volume, in the temporal unit"
+    glmax        i32           "unused, kept for ANALYZE compatibility"
+    glmin        i32           "unused, kept for ANALYZE compatibility"
+    descrip      string[80]    "free-form description, often the scanner and sequence"
+    auxFile      string[24]    "name of an auxiliary file"
+    qformCode    NiftiXform    "space the quaternion transform maps into; 0 means unused"
+    sformCode    NiftiXform    "space the affine transform maps into; 0 means unused"
+    quaternB     f32           "quaternion i component; the real part is derived from the three"
+    quaternC     f32           "quaternion j component"
+    quaternD     f32           "quaternion k component"
+    qoffsetX     f32           "translation, x (mm)"
+    qoffsetY     f32           "translation, y (mm)"
+    qoffsetZ     f32           "translation, z (mm)"
+    srowX        f32[4]        "first row of the affine transform"
+    srowY        f32[4]        "second row of the affine transform"
+    srowZ        f32[4]        "third row of the affine transform"
+    intentName   string[16]    "name or meaning of the data, when intentCode needs one"
+    magic        string[4]     "n+1 for a single .nii file, ni1 for a .hdr / .img pair"
+}
+"""

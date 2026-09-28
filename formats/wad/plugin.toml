@@ -1,0 +1,75 @@
+id = "wad"
+name = "Doom WAD"
+version = "1.0.0"
+description = "Doom WAD: the header and the full lump directory, followed to its offset."
+author = "Nybble"
+
+[[formats]]
+name = "IWAD"
+extension = "wad"
+description = "Doom IWAD, a complete game data file"
+confidence = 92
+entry = "Wad"
+endian = "le"
+detect = [{ offset = 0, hex = "49 57 41 44" }]
+schema = """
+// WAD - Where's All the Data, the archive id Software shipped Doom in, and the
+// reason a thirty-year-old game still has a modding scene. The format is about
+// as small as an archive format can be: a twelve-byte header, the lumps
+// themselves, and a directory at the end saying where each one starts.
+//
+// The directory living at the end is what makes a WAD append-friendly: new
+// lumps are written over the old directory and a fresh directory goes after
+// them, so building a PWAD never rewrites what came before.
+//
+// A lump is just bytes; the name says what it is. Levels are a run of lumps
+// after a map marker - ExMy or MAPxx, then THINGS, LINEDEFS, SIDEDEFS, VERTEXES,
+// SEGS, SSECTORS, NODES, SECTORS, REJECT, BLOCKMAP. Markers like S_START and
+// S_END bracket the sprites, P_START and P_END the wall patches, and those
+// markers are zero-length lumps: the name is the whole content.
+//
+// An IWAD is a complete game (doom.wad, doom2.wad). A PWAD is a patch: the
+// engine loads it after the IWAD, and a lump in it replaces the IWAD lump of the
+// same name.
+
+struct WadLump {
+    filePos u32       "file offset where this lump's data starts"
+    size    u32       "bytes of data; 0 for a marker lump, whose name is its whole purpose"
+    name    string[8] "lump name, uppercase ASCII, NUL-padded rather than terminated"
+}
+
+struct Wad {
+    identification char[4] "IWAD for a complete game, PWAD for a patch"
+    numLumps       u32     "number of lumps, and so of directory entries"
+    infoTableOfs   u32     "file offset of the directory, which sits after the lump data"
+    directory at infoTableOfs WadLump[numLumps] "every lump in the file, in load order"
+}
+"""
+
+[[formats]]
+name = "PWAD"
+extension = "wad"
+description = "Doom PWAD, a patch loaded over an IWAD"
+confidence = 92
+entry = "Wad"
+endian = "le"
+detect = [{ offset = 0, hex = "50 57 41 44" }]
+schema = """
+// The patch flavour of the WAD format: identical layout, different magic. The
+// engine loads a PWAD after the IWAD, and any lump whose name matches one
+// already loaded replaces it - which is how a single level or texture pack can
+// override part of a game without touching it.
+
+struct WadLump {
+    filePos u32       "file offset where this lump's data starts"
+    size    u32       "bytes of data; 0 for a marker lump"
+    name    string[8] "lump name, uppercase ASCII, NUL-padded rather than terminated"
+}
+
+struct Wad {
+    identification char[4] "PWAD"
+    numLumps       u32     "number of lumps, and so of directory entries"
+    infoTableOfs   u32     "file offset of the directory, which sits after the lump data"
+    directory at infoTableOfs WadLump[numLumps] "every lump in the patch, in load order"
+}
+"""

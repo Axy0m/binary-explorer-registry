@@ -1,0 +1,5 @@
+category = "audio"
+tags = ["audio", "apple", "macos", "ios", "chunked", "container"]
+maintainer = "Nybble"
+homepage = "https://developer.apple.com/library/archive/documentation/MusicAudio/Reference/CAFSpec/CAF_intro/CAF_intro.html"
+sample = ""
