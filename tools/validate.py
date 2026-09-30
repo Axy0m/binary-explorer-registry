@@ -131,22 +131,29 @@ def validate_pack(folder: Path, seen_ids: dict[str, str]) -> dict:
     }
 
 
-def build_index() -> list[dict]:
+def build_index() -> tuple[list[dict], list[str]]:
+    """Validate every pack, collecting all problems instead of stopping at the
+    first, so one run reports everything a contributor needs to fix."""
     if not FORMATS.is_dir():
-        return []
+        return [], []
     seen: dict[str, str] = {}
-    entries = []
+    entries: list[dict] = []
+    problems: list[str] = []
     for folder in sorted(p for p in FORMATS.iterdir() if p.is_dir()):
-        entries.append(validate_pack(folder, seen))
-    return entries
+        try:
+            entries.append(validate_pack(folder, seen))
+        except Problem as e:
+            problems.append(str(e))
+    return entries, problems
 
 
 def main() -> int:
     check = "--check" in sys.argv[1:]
-    try:
-        entries = build_index()
-    except Problem as e:
-        print(f"validation FAILED: {e}", file=sys.stderr)
+    entries, problems = build_index()
+    if problems:
+        print(f"validation FAILED: {len(problems)} problem(s)", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
         return 1
 
     catalog = {"version": 1, "count": len(entries), "formats": entries}
